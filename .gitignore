@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build & PWA generated directories
+dist/
+dev-dist/
+build/
+coverage/
+
+# Playwright & test artifacts
+.playwright-cli/
+playwright-report/
+test-results/
+
+# Environment variables
+.env*
+!.env.example
+
+# Android TWA / Bubblewrap signing keys (NEVER commit private keystores)
+*.keystore
+*.jks
+keystore.properties
+twa-build/
+
+# Logs & OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

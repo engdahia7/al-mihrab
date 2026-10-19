@@ -1,0 +1,6 @@
+{
+  "name": "المحراب — مواقيت الصلاة والمصحف والأذكار الموثقة",
+  "description": "منصة إسلامية احترافية لمواقيت الصلاة الفلكية الدقيقة، المصحف الشريف بالرسم العثماني مع التفسير الميسر، والأذكار الصحيحة الموثقة من حصن المسلم والسنّة النبوية.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

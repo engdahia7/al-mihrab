@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Amiri', Georgia, serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  html,
+  body {
+    font-family: var(--font-sans);
+    background-color: #FBF9F5;
+    color: #1C1917;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+}
+
+.font-quran {
+  font-family: 'Amiri', Georgia, serif;
+  line-height: 2.35;
+}
+
+.font-display {
+  font-family: 'Amiri', Georgia, serif;
+}
+
+.font-tabular {
+  font-family: 'IBM Plex Mono', 'IBM Plex Sans Arabic', monospace;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,61 @@
+{
+  "packageId": "app.almihrab.twa",
+  "host": "al-mihrab.example.com",
+  "name": "المحراب — مواقيت الصلاة والمصحف والأذكار",
+  "launcherName": "المحراب",
+  "display": "standalone",
+  "themeColor": "#14532D",
+  "themeColorDark": "#0C1814",
+  "navigationColor": "#FBF9F5",
+  "navigationColorDark": "#0C1814",
+  "navigationDividerColor": "#E7E2D8",
+  "navigationDividerColorDark": "#1F2E28",
+  "backgroundColor": "#FBF9F5",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://al-mihrab.example.com/pwa-512x512.png",
+  "maskableIconUrl": "https://al-mihrab.example.com/pwa-maskable-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "almihrab-key"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "المصحف الشريف",
+      "shortName": "المصحف",
+      "url": "https://al-mihrab.example.com/?tab=quran",
+      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+    },
+    {
+      "name": "مواقيت الصلاة",
+      "shortName": "المواقيت",
+      "url": "https://al-mihrab.example.com/?tab=prayers",
+      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+    },
+    {
+      "name": "اتجاه القبلة",
+      "shortName": "القبلة",
+      "url": "https://al-mihrab.example.com/?tab=qibla",
+      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://al-mihrab.example.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "portrait"
+}

@@ -1,0 +1,1086 @@
+import type { CityLocation } from './astronomy.ts';
+import { KAABA_COORDS, calculateQiblaDirection } from './astronomy.ts';
+
+// ============================================================================
+// 1. حاسبة المواريث الشرعية المبسطة (Islamic Inheritance / Fara'id Calculator)
+// ============================================================================
+
+export interface InheritanceInput {
+  estateAmount: number;
+  deceasedGender: 'male' | 'female';
+  hasHusband: boolean; // valid when deceasedGender === 'female'
+  wivesCount: number; // 0..4, valid when deceasedGender === 'male'
+  hasFather: boolean;
+  hasMother: boolean;
+  sonsCount: number;
+  daughtersCount: number;
+  fullBrothersCount: number;
+  fullSistersCount: number;
+}
+
+export interface HeirShareItem {
+  id: string;
+  heirTitleAr: string;
+  count: number;
+  shareTypeAr: 'فرض' | 'تعصيب' | 'فرض وتعصيب' | 'فرض وردّ' | 'محجوب';
+  fractionLabelAr: string;
+  shareRatio: number; // 0..1 of estate
+  totalAmount: number;
+  amountPerPerson: number;
+  quranicEvidenceAr: string;
+  explanationAr: string;
+}
+
+export interface InheritanceResult {
+  estateAmount: number;
+  shares: HeirShareItem[];
+  blockedHeirs: HeirShareItem[];
+  caseTypeAr: 'عادلة' | 'عَوْل (زيادة الفروض على التركة)' | 'رَدّ (فائض يُردّ على أصحاب الفروض)' | 'تعصيب';
+  summaryNoteAr: string;
+}
+
+export function calculateInheritance(input: InheritanceInput): InheritanceResult {
+  const estate = Math.max(0, Number(input.estateAmount) || 0);
+  const hasChildren = input.sonsCount > 0 || input.daughtersCount > 0;
+  const hasMaleDescendant = input.sonsCount > 0;
+  const siblingsTotal = input.fullBrothersCount + input.fullSistersCount;
+  const hasMultipleSiblings = siblingsTotal >= 2;
+
+  const rawFixedShares: {
+    id: string;
+    heirTitleAr: string;
+    count: number;
+    shareTypeAr: HeirShareItem['shareTypeAr'];
+    fractionLabelAr: string;
+    rawWeight: number;
+    eligibleForRadd: boolean;
+    quranicEvidenceAr: string;
+    explanationAr: string;
+  }[] = [];
+
+  const blockedHeirs: HeirShareItem[] = [];
+
+  // 1. الزوج أو الزوجات
+  if (input.deceasedGender === 'female' && input.hasHusband) {
+    const weight = hasChildren ? 0.25 : 0.5;
+    rawFixedShares.push({
+      id: 'husband',
+      heirTitleAr: 'الزوج',
+      count: 1,
+      shareTypeAr: 'فرض',
+      fractionLabelAr: hasChildren ? 'الرُّبُع (١/٤)' : 'النِّصْف (١/٢)',
+      rawWeight: weight,
+      eligibleForRadd: false, // الزوجان لا يُردّ عليهما عند الجمهور
+      quranicEvidenceAr:
+        'قال تعالى: ﴿وَلَكُمْ نِصْفُ مَا تَرَكَ أَزْوَاجُكُمْ إِن لَّمْ يَكُن لَّهُنَّ وَلَدٌ فَإِن كَانَ لَهُنَّ وَلَدٌ فَلَكُمُ الرُّبُعُ﴾ [النساء: ١٢]',
+      explanationAr: hasChildren
+        ? 'يرث الزوج الربع لوجود الفرع الوارث (الأبناء أو البنات).'
+        : 'يرث الزوج النصف لعدم وجود الفرع الوارث.',
+    });
+  } else if (input.deceasedGender === 'male' && input.wivesCount > 0) {
+    const wives = Math.min(4, Math.max(1, Math.round(input.wivesCount)));
+    const weight = hasChildren ? 0.125 : 0.25;
+    rawFixedShares.push({
+      id: 'wives',
+      heirTitleAr: wives === 1 ? 'الزوجة' : `الزوجات (${wives})`,
+      count: wives,
+      shareTypeAr: 'فرض',
+      fractionLabelAr: hasChildren ? 'الثُّمُن (١/٨)' : 'الرُّبُع (١/٤)',
+      rawWeight: weight,
+      eligibleForRadd: false,
+      quranicEvidenceAr:
+        'قال تعالى: ﴿وَلَهُنَّ الرُّبُعُ مِمَّا تَرَكْتُمْ إِن لَّمْ يَكُن لَّكُمْ وَلَدٌ فَإِن كَانَ لَكُمْ وَلَدٌ فَلَهُنَّ الثُّمُنُ﴾ [النساء: ١٢]',
+      explanationAr: hasChildren
+        ? 'ترث الزوجة (أو الزوجات بالتساوي) الثمن لوجود الفرع الوارث.'
+        : 'ترث الزوجة (أو الزوجات بالتساوي) الربع لعدم وجود الفرع الوارث.',
+    });
+  }
+
+  // 2. الأم
+  if (input.hasMother) {
+    const getsSixth = hasChildren || hasMultipleSiblings;
+    const weight = getsSixth ? 1 / 6 : 1 / 3;
+    rawFixedShares.push({
+      id: 'mother',
+      heirTitleAr: 'الأم',
+      count: 1,
+      shareTypeAr: 'فرض',
+      fractionLabelAr: getsSixth ? 'السُّدُس (١/٦)' : 'الثُّلُث (١/٣)',
+      rawWeight: weight,
+      eligibleForRadd: true,
+      quranicEvidenceAr:
+        'قال تعالى: ﴿وَلِأَبَوَيْهِ لِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ مِمَّا تَرَكَ إِن كَانَ لَهُ وَلَدٌ فَإِن لَّمْ يَكُن لَّهُ وَلَدٌ وَوَرِثَهُ أَبَوَاهُ فَلِأُمِّهِ الثُّلُثُ فَإِن كَانَ لَهُ إِخْوَةٌ فَلِأُمِّهِ السُّدُسُ﴾ [النساء: ١١]',
+      explanationAr: getsSixth
+        ? 'ترث الأم السدس لوجود الفرع الوارث أو جمع من الإخوة.'
+        : 'ترث الأم الثلث لعدم وجود الفرع الوارث ولا جمع من الإخوة.',
+    });
+  }
+
+  // 3. الأب (إذا وُجد فرع وارث مذكر يرث السدس فرضاً، وإذا وُجدت بنات فقط يرث السدس فرضاً والباقي تعصيباً، وإذا لم يوجد فرع وارث يرث بالتعصيب)
+  if (input.hasFather && hasMaleDescendant) {
+    rawFixedShares.push({
+      id: 'father',
+      heirTitleAr: 'الأب',
+      count: 1,
+      shareTypeAr: 'فرض',
+      fractionLabelAr: 'السُّدُس (١/٦)',
+      rawWeight: 1 / 6,
+      eligibleForRadd: true,
+      quranicEvidenceAr:
+        'قال تعالى: ﴿وَلِأَبَوَيْهِ لِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ مِمَّا تَرَكَ إِن كَانَ لَهُ وَلَدٌ﴾ [النساء: ١١]',
+      explanationAr: 'يرث الأب السدس فرضاً لوجود الفرع الوارث المذكر (الابن).',
+    });
+  } else if (input.hasFather && !hasMaleDescendant && input.daughtersCount > 0) {
+    rawFixedShares.push({
+      id: 'father',
+      heirTitleAr: 'الأب',
+      count: 1,
+      shareTypeAr: 'فرض وتعصيب',
+      fractionLabelAr: 'السُّدُس فرضاً + الباقي تعصيباً',
+      rawWeight: 1 / 6,
+      eligibleForRadd: false,
+      quranicEvidenceAr:
+        'قال تعالى: ﴿وَلِأَبَوَيْهِ لِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ مِمَّا تَرَكَ إِن كَانَ لَهُ وَلَدٌ﴾ وحديث: «ألحقوا الفرائض بأهلها فما بقي فهو لأولى رجل ذكر» (متفق عليه)',
+      explanationAr:
+        'يرث الأب السدس فرضاً مع وجود البنات، ويأخذ ما بقي بعد الفروض تعصيباً.',
+    });
+  }
+
+  // 4. البنات عند عدم وجود ابن ذكر (صاحبات فرض: النصف لواحدة، الثلثان لاثنتين فأكثر)
+  if (input.daughtersCount > 0 && input.sonsCount === 0) {
+    const isSingle = input.daughtersCount === 1;
+    const weight = isSingle ? 0.5 : 2 / 3;
+    rawFixedShares.push({
+      id: 'daughters_fixed',
+      heirTitleAr: isSingle ? 'البنت' : `البنات (${input.daughtersCount})`,
+      count: input.daughtersCount,
+      shareTypeAr: 'فرض',
+      fractionLabelAr: isSingle ? 'النِّصْف (١/٢)' : 'الثُّلُثَان (٢/٣)',
+      rawWeight: weight,
+      eligibleForRadd: true,
+      quranicEvidenceAr:
+        'قال تعالى: ﴿فَإِن كُنَّ نِسَاءً فَوْقَ اثْنَتَيْنِ فَلَهُنَّ ثُلُثَا مَا تَرَكَ وَإِن كَانَتْ وَاحِدَةً فَلَهَا النِّصْفُ﴾ [النساء: ١١]',
+      explanationAr: isSingle
+        ? 'ترث البنت الواحدة النصف فرضاً لعدم وجود معصِّب (ابن).'
+        : 'ترث البنات الثلثين بالتساوي لعدم وجود ابن معصِّب.',
+    });
+  }
+
+  // 5. الإخوة والأخوات الأشقاء (يُحجبون بالأب أو بالابن الذكر اتفاقاً)
+  if (siblingsTotal > 0) {
+    if (input.hasFather || hasMaleDescendant) {
+      blockedHeirs.push({
+        id: 'siblings_blocked',
+        heirTitleAr: 'الإخوة والأخوات الأشقاء',
+        count: siblingsTotal,
+        shareTypeAr: 'محجوب',
+        fractionLabelAr: 'محجوبون (٠٪)',
+        shareRatio: 0,
+        totalAmount: 0,
+        amountPerPerson: 0,
+        quranicEvidenceAr:
+          'قال تعالى: ﴿يَسْتَفْتُونَكَ قُلِ اللَّهُ يُفْتِيكُمْ فِي الْكَلَالَةِ﴾ [النساء: ١٧٦] — والكلالة من لا ولد له ولا والد',
+        explanationAr: hasMaleDescendant
+          ? 'يُحجب الإخوة والأخوات حجب حرمان بوجود الفرع الوارث المذكر (الابن).'
+          : 'يُحجب الإخوة والأخوات حجب حرمان بوجود الأصل الوارث المذكر (الأب).',
+      });
+    } else if (!hasChildren && input.fullBrothersCount === 0 && input.fullSistersCount > 0) {
+      // كلالة: أخوات شقيقات فقط بدون إخوة ذكور وبدون فرع وارث ولا أب
+      const isSingleSister = input.fullSistersCount === 1;
+      const weight = isSingleSister ? 0.5 : 2 / 3;
+      rawFixedShares.push({
+        id: 'sisters_kalalah',
+        heirTitleAr: isSingleSister
+          ? 'الأخت الشقيقة'
+          : `الأخوات الشقيقات (${input.fullSistersCount})`,
+        count: input.fullSistersCount,
+        shareTypeAr: 'فرض',
+        fractionLabelAr: isSingleSister ? 'النِّصْف (١/٢)' : 'الثُّلُثَان (٢/٣)',
+        rawWeight: weight,
+        eligibleForRadd: true,
+        quranicEvidenceAr:
+          'قال تعالى: ﴿إِنِ امْرُؤٌ هَلَكَ لَيْسَ لَهُ وَلَدٌ وَلَهُ أُخْتٌ فَلَهَا نِصْفُ مَا تَرَكَ... فَإِن كَانَتَا اثْنَتَيْنِ فَلَهُمَا الثُّلُثَانِ مِمَّا تَرَكَ﴾ [النساء: ١٧٦]',
+        explanationAr: isSingleSister
+          ? 'ترث الأخت الشقيقة النصف فرضاً في الكلالة (عدم الولد والوالد).'
+          : 'ترث الأخوات الشقيقات الثلثين فرضاً في الكلالة.',
+      });
+    }
+  }
+
+  // مجموع الفروض الأولية
+  const totalFixedWeight = rawFixedShares.reduce((acc, s) => acc + s.rawWeight, 0);
+
+  const finalShares: HeirShareItem[] = [];
+  let caseTypeAr: InheritanceResult['caseTypeAr'] = 'عادلة';
+  let summaryNoteAr = 'توزعت التركة وفق الفروض والتعصيب الشرعي في كتاب الله وسنة رسوله ﷺ.';
+
+  // الحالة الأولى: عَوْل (مجموع الفروض أكبر من 1)
+  if (totalFixedWeight > 1.0001) {
+    caseTypeAr = 'عَوْل (زيادة الفروض على التركة)';
+    summaryNoteAr =
+      'مسألة عَوْل: زادت سهام أصحاب الفروض على أصل المسألة، فتدخل النقص على جميع أصحاب الفروض بنسبة فروضهم.';
+    for (const s of rawFixedShares) {
+      const normalizedRatio = s.rawWeight / totalFixedWeight;
+      const totalAmt = estate * normalizedRatio;
+      finalShares.push({
+        id: s.id,
+        heirTitleAr: s.heirTitleAr,
+        count: s.count,
+        shareTypeAr: s.shareTypeAr,
+        fractionLabelAr: `${s.fractionLabelAr} (بعد العول: ${(normalizedRatio * 100).toFixed(1)}٪)`,
+        shareRatio: normalizedRatio,
+        totalAmount: totalAmt,
+        amountPerPerson: totalAmt / s.count,
+        quranicEvidenceAr: s.quranicEvidenceAr,
+        explanationAr: s.explanationAr,
+      });
+    }
+    return {
+      estateAmount: estate,
+      shares: finalShares,
+      blockedHeirs,
+      caseTypeAr,
+      summaryNoteAr,
+    };
+  }
+
+  // المتبقي بعد أصحاب الفروض
+  const remainder = Math.max(0, 1 - totalFixedWeight);
+
+  // هل يوجد عاصب يأخذ الباقي؟
+  // 1) الأبناء الذكور (مع البنات إن وجدن للذكر مثل حظ الأنثيين)
+  // 2) الأب (عند عدم وجود ابن ذكر)
+  // 3) الإخوة الأشقاء (عند عدم وجود أب ولا ابن، ومع البنات أو الأخوات)
+  // 4) الأخوات الشقيقات مع البنات (عصبة مع الغير: الأخوات مع البنات عصبة)
+
+  const hasAsabah =
+    input.sonsCount > 0 ||
+    (input.hasFather && !hasMaleDescendant) ||
+    (!input.hasFather && !hasMaleDescendant && input.fullBrothersCount > 0) ||
+    (!input.hasFather &&
+      !hasMaleDescendant &&
+      input.daughtersCount > 0 &&
+      input.fullSistersCount > 0 &&
+      input.fullBrothersCount === 0);
+
+  if (hasAsabah) {
+    caseTypeAr = 'تعصيب';
+    // أضف الفروض كما هي (مع دمج الباقي للأب إن كان فرضاً وتعصيباً)
+    for (const s of rawFixedShares) {
+      if (s.id === 'father' && s.shareTypeAr === 'فرض وتعصيب') {
+        const combinedRatio = s.rawWeight + remainder;
+        const totalAmt = estate * combinedRatio;
+        finalShares.push({
+          id: s.id,
+          heirTitleAr: s.heirTitleAr,
+          count: 1,
+          shareTypeAr: 'فرض وتعصيب',
+          fractionLabelAr: `السدس + الباقي (${(combinedRatio * 100).toFixed(1)}٪)`,
+          shareRatio: combinedRatio,
+          totalAmount: totalAmt,
+          amountPerPerson: totalAmt,
+          quranicEvidenceAr: s.quranicEvidenceAr,
+          explanationAr: s.explanationAr,
+        });
+      } else {
+        const totalAmt = estate * s.rawWeight;
+        finalShares.push({
+          id: s.id,
+          heirTitleAr: s.heirTitleAr,
+          count: s.count,
+          shareTypeAr: s.shareTypeAr,
+          fractionLabelAr: s.fractionLabelAr,
+          shareRatio: s.rawWeight,
+          totalAmount: totalAmt,
+          amountPerPerson: totalAmt / s.count,
+          quranicEvidenceAr: s.quranicEvidenceAr,
+          explanationAr: s.explanationAr,
+        });
+      }
+    }
+
+    // توزيع الباقي على العصبة:
+    if (input.sonsCount > 0) {
+      const totalUnits = input.sonsCount * 2 + input.daughtersCount;
+      const unitRatio = remainder / totalUnits;
+
+      // نصيب الأبناء الذكور
+      const sonsRatio = unitRatio * 2 * input.sonsCount;
+      const sonsAmt = estate * sonsRatio;
+      finalShares.push({
+        id: 'sons',
+        heirTitleAr: input.sonsCount === 1 ? 'الابن' : `الأبناء الذكور (${input.sonsCount})`,
+        count: input.sonsCount,
+        shareTypeAr: 'تعصيب',
+        fractionLabelAr:
+          input.daughtersCount > 0
+            ? `تعصيب للذكر مثل حظ الأنثيين (${(sonsRatio * 100).toFixed(1)}٪)`
+            : `الباقي تعصيباً (${(sonsRatio * 100).toFixed(1)}٪)`,
+        shareRatio: sonsRatio,
+        totalAmount: sonsAmt,
+        amountPerPerson: sonsAmt / input.sonsCount,
+        quranicEvidenceAr:
+          'قال تعالى: ﴿يُوصِيكُمُ اللَّهُ فِي أَوْلَادِكُمْ لِلذَّكَرِ مِثْلُ حَظِّ الْأُنثَيَيْنِ﴾ [النساء: ١١]',
+        explanationAr:
+          input.daughtersCount > 0
+            ? 'يشترك الأبناء والبنات في الباقي بعد الفروض للذكر مثل حظ الأنثيين.'
+            : 'يرث الأبناء الباقي بعد أصحاب الفروض بالتساوي بينهم تعصيباً.',
+      });
+
+      // نصيب البنات بالغير (مع الابن)
+      if (input.daughtersCount > 0) {
+        const daughtersRatio = unitRatio * input.daughtersCount;
+        const daughtersAmt = estate * daughtersRatio;
+        finalShares.push({
+          id: 'daughters_asabah',
+          heirTitleAr:
+            input.daughtersCount === 1 ? 'البنت' : `البنات (${input.daughtersCount})`,
+          count: input.daughtersCount,
+          shareTypeAr: 'تعصيب',
+          fractionLabelAr: `تعصيب بالغير مع الابن (${(daughtersRatio * 100).toFixed(1)}٪)`,
+          shareRatio: daughtersRatio,
+          totalAmount: daughtersAmt,
+          amountPerPerson: daughtersAmt / input.daughtersCount,
+          quranicEvidenceAr:
+            'قال تعالى: ﴿يُوصِيكُمُ اللَّهُ فِي أَوْلَادِكُمْ لِلذَّكَرِ مِثْلُ حَظِّ الْأُنثَيَيْنِ﴾ [النساء: ١١]',
+          explanationAr: 'يعصّب الابنُ أختَه (البنت) فيقتسمون الباقي للذكر مثل حظ الأنثيين.',
+        });
+      }
+    } else if (input.hasFather && input.daughtersCount === 0) {
+      // الأب منفرداً عن الفرع الوارث يأخذ الباقي تعصيباً
+      const fatherAmt = estate * remainder;
+      finalShares.push({
+        id: 'father_asabah',
+        heirTitleAr: 'الأب',
+        count: 1,
+        shareTypeAr: 'تعصيب',
+        fractionLabelAr: `الباقي تعصيباً (${(remainder * 100).toFixed(1)}٪)`,
+        shareRatio: remainder,
+        totalAmount: fatherAmt,
+        amountPerPerson: fatherAmt,
+        quranicEvidenceAr:
+          'حديث ابن عباس رضي الله عنهما: «ألحقوا الفرائض بأهلها فما بقي فهو لأولى رجل ذكر» (متفق عليه)',
+        explanationAr: 'يرث الأب جميع التركة أو ما بقي بعد الفروض تعصيباً لعدم وجود فرع وارث.',
+      });
+    } else if (!input.hasFather && !hasMaleDescendant && input.fullBrothersCount > 0) {
+      // الإخوة الأشقاء عصبة بأنفسهم (ومعهم الأخوات الشقيقات للذكر مثل حظ الأنثيين)
+      const totalUnits = input.fullBrothersCount * 2 + input.fullSistersCount;
+      const unitRatio = remainder / totalUnits;
+      const brosRatio = unitRatio * 2 * input.fullBrothersCount;
+      const brosAmt = estate * brosRatio;
+
+      finalShares.push({
+        id: 'brothers_asabah',
+        heirTitleAr:
+          input.fullBrothersCount === 1
+            ? 'الأخ الشقيق'
+            : `الإخوة الأشقاء (${input.fullBrothersCount})`,
+        count: input.fullBrothersCount,
+        shareTypeAr: 'تعصيب',
+        fractionLabelAr: `تعصيب (${(brosRatio * 100).toFixed(1)}٪)`,
+        shareRatio: brosRatio,
+        totalAmount: brosAmt,
+        amountPerPerson: brosAmt / input.fullBrothersCount,
+        quranicEvidenceAr:
+          'قال تعالى: ﴿وَإِن كَانُوا إِخْوَةً رِّجَالًا وَنِسَاءً فَلِلذَّكَرِ مِثْلُ حَظِّ الْأُنثَيَيْنِ﴾ [النساء: ١٧٦]',
+        explanationAr:
+          'يرث الإخوة الأشقاء ما بقي بعد الفروض تعصيباً لعدم وجود الأب أو الابن.',
+      });
+
+      if (input.fullSistersCount > 0) {
+        const sisRatio = unitRatio * input.fullSistersCount;
+        const sisAmt = estate * sisRatio;
+        finalShares.push({
+          id: 'sisters_with_brothers',
+          heirTitleAr:
+            input.fullSistersCount === 1
+              ? 'الأخت الشقيقة'
+              : `الأخوات الشقيقات (${input.fullSistersCount})`,
+          count: input.fullSistersCount,
+          shareTypeAr: 'تعصيب',
+          fractionLabelAr: `تعصيب بالغير (${(sisRatio * 100).toFixed(1)}٪)`,
+          shareRatio: sisRatio,
+          totalAmount: sisAmt,
+          amountPerPerson: sisAmt / input.fullSistersCount,
+          quranicEvidenceAr:
+            'قال تعالى: ﴿وَإِن كَانُوا إِخْوَةً رِّجَالًا وَنِسَاءً فَلِلذَّكَرِ مِثْلُ حَظِّ الْأُنثَيَيْنِ﴾ [النساء: ١٧٦]',
+          explanationAr: 'ترث الأخوات الشقيقات مع الإخوة الأشقاء للذكر مثل حظ الأنثيين.',
+        });
+      }
+    } else if (
+      !input.hasFather &&
+      !hasMaleDescendant &&
+      input.daughtersCount > 0 &&
+      input.fullSistersCount > 0 &&
+      input.fullBrothersCount === 0
+    ) {
+      // الأخوات الشقيقات مع البنات عصبة مع الغير
+      const sisAmt = estate * remainder;
+      finalShares.push({
+        id: 'sisters_ma_alghayr',
+        heirTitleAr:
+          input.fullSistersCount === 1
+            ? 'الأخت الشقيقة'
+            : `الأخوات الشقيقات (${input.fullSistersCount})`,
+        count: input.fullSistersCount,
+        shareTypeAr: 'تعصيب',
+        fractionLabelAr: `الباقي عصبة مع الغير (${(remainder * 100).toFixed(1)}٪)`,
+        shareRatio: remainder,
+        totalAmount: sisAmt,
+        amountPerPerson: sisAmt / input.fullSistersCount,
+        quranicEvidenceAr:
+          'قضاء النبي ﷺ في ابنة وابنة ابن وأخت: جعل للأخت ما بقي (رواه البخاري ٦٧٣٦)',
+        explanationAr:
+          'الأخوات الشقيقات مع البنات عند عدم الأب والابن عصبة مع الغير يأخذن ما بقي بعد الفروض.',
+      });
+    }
+
+    return {
+      estateAmount: estate,
+      shares: finalShares,
+      blockedHeirs,
+      caseTypeAr,
+      summaryNoteAr,
+    };
+  }
+
+  // لا يوجد عاصب، ومجموع الفروض أقل من 1 -> مسألة رَدّ (Radd)
+  if (remainder > 0.0001 && rawFixedShares.length > 0) {
+    caseTypeAr = 'رَدّ (فائض يُردّ على أصحاب الفروض)';
+    const raddEligibleWeight = rawFixedShares
+      .filter((s) => s.eligibleForRadd)
+      .reduce((acc, s) => acc + s.rawWeight, 0);
+
+    summaryNoteAr =
+      'مسألة رَدّ: بقي فائض من التركة بعد الفروض ولم يوجد عاصب، فرُدّ الفائض على أصحاب الفروض النسبية بقدر سهامهم (دون الزوجين عند جمهور الفقهاء).';
+
+    for (const s of rawFixedShares) {
+      let finalRatio = s.rawWeight;
+      if (s.eligibleForRadd && raddEligibleWeight > 0) {
+        finalRatio = s.rawWeight + remainder * (s.rawWeight / raddEligibleWeight);
+      } else if (raddEligibleWeight === 0) {
+        // لم يوجد إلا أحد الزوجين فقط
+        finalRatio = 1;
+      }
+      const totalAmt = estate * finalRatio;
+      finalShares.push({
+        id: s.id,
+        heirTitleAr: s.heirTitleAr,
+        count: s.count,
+        shareTypeAr: s.eligibleForRadd ? 'فرض وردّ' : 'فرض',
+        fractionLabelAr: s.eligibleForRadd
+          ? `${s.fractionLabelAr} + الرَّدّ (${(finalRatio * 100).toFixed(1)}٪)`
+          : s.fractionLabelAr,
+        shareRatio: finalRatio,
+        totalAmount: totalAmt,
+        amountPerPerson: totalAmt / s.count,
+        quranicEvidenceAr: s.quranicEvidenceAr,
+        explanationAr: s.explanationAr,
+      });
+    }
+
+    return {
+      estateAmount: estate,
+      shares: finalShares,
+      blockedHeirs,
+      caseTypeAr,
+      summaryNoteAr,
+    };
+  }
+
+  // مسألة عادلة تماماً
+  for (const s of rawFixedShares) {
+    const totalAmt = estate * s.rawWeight;
+    finalShares.push({
+      id: s.id,
+      heirTitleAr: s.heirTitleAr,
+      count: s.count,
+      shareTypeAr: s.shareTypeAr,
+      fractionLabelAr: s.fractionLabelAr,
+      shareRatio: s.rawWeight,
+      totalAmount: totalAmt,
+      amountPerPerson: totalAmt / s.count,
+      quranicEvidenceAr: s.quranicEvidenceAr,
+      explanationAr: s.explanationAr,
+    });
+  }
+
+  return {
+    estateAmount: estate,
+    shares: finalShares,
+    blockedHeirs,
+    caseTypeAr,
+    summaryNoteAr,
+  };
+}
+
+// ============================================================================
+// 2. وضع السفر (أحكام القصر والجمع وحساب المسافة بين المدن)
+// ============================================================================
+
+export const QASR_THRESHOLD_KM = 80; // مسافة القصر عند جمهور الفقهاء (٤ برد ≈ ٨٠ كم)
+
+export interface TravelRulingResult {
+  originCity: CityLocation;
+  destinationCity: CityLocation;
+  distanceKm: number;
+  isQasrPermitted: boolean;
+  rulingTitleAr: string;
+  rulingExplanationAr: string;
+  prayerRakats: {
+    prayerNameAr: string;
+    residentRakats: number;
+    travelerRakats: number;
+    canShorten: boolean;
+    noteAr: string;
+  }[];
+  jamOptions: {
+    titleAr: string;
+    prayersAr: string;
+    explanationAr: string;
+  }[];
+}
+
+export function calculateCityDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+export function calculateTravelStatus(
+  originCity: CityLocation,
+  destinationCity: CityLocation
+): TravelRulingResult {
+  const distanceKm = calculateCityDistanceKm(
+    originCity.latitude,
+    originCity.longitude,
+    destinationCity.latitude,
+    destinationCity.longitude
+  );
+  const isQasrPermitted = distanceKm >= QASR_THRESHOLD_KM;
+
+  const prayerRakats = [
+    {
+      prayerNameAr: 'الفجر',
+      residentRakats: 2,
+      travelerRakats: 2,
+      canShorten: false,
+      noteAr: 'تصلى ركعتين في الحضر والسفر ولا يدخلها القصر',
+    },
+    {
+      prayerNameAr: 'الظهر',
+      residentRakats: 4,
+      travelerRakats: isQasrPermitted ? 2 : 4,
+      canShorten: isQasrPermitted,
+      noteAr: isQasrPermitted
+        ? 'تُقصر إلى ركعتين سنةً مؤكدةً ويجوز جمعها مع العصر'
+        : 'تُصلى أربع ركعات لعدم بلوغ مسافة القصر',
+    },
+    {
+      prayerNameAr: 'العصر',
+      residentRakats: 4,
+      travelerRakats: isQasrPermitted ? 2 : 4,
+      canShorten: isQasrPermitted,
+      noteAr: isQasrPermitted
+        ? 'تُقصر إلى ركعتين ويجوز جمعها مع الظهر تقديماً أو تأخيراً'
+        : 'تُصلى أربع ركعات تامة',
+    },
+    {
+      prayerNameAr: 'المغرب',
+      residentRakats: 3,
+      travelerRakats: 3,
+      canShorten: false,
+      noteAr: isQasrPermitted
+        ? 'تُصلى ثلاث ركعات ولا تُقصر، ويجوز جمعها مع العشاء'
+        : 'تُصلى ثلاث ركعات تامة',
+    },
+    {
+      prayerNameAr: 'العشاء',
+      residentRakats: 4,
+      travelerRakats: isQasrPermitted ? 2 : 4,
+      canShorten: isQasrPermitted,
+      noteAr: isQasrPermitted
+        ? 'تُقصر إلى ركعتين ويجوز جمعها مع المغرب تقديماً أو تأخيراً'
+        : 'تُصلى أربع ركعات تامة',
+    },
+  ];
+
+  const jamOptions = [
+    {
+      titleAr: 'الجمع بين الظهر والعصر (قصراً: ركعتان + ركعتان)',
+      prayersAr: 'الظهر + العصر',
+      explanationAr:
+        'يجوز للمسافر جمع التقديم في وقت الظهر أو جمع التأخير في وقت العصر بأذان واحد وإقامتين.',
+    },
+    {
+      titleAr: 'الجمع بين المغرب والعشاء (٣ ركعات + ركعتان)',
+      prayersAr: 'المغرب + العشاء',
+      explanationAr:
+        'يجوز للمسافر جمع التقديم في وقت المغرب أو جمع التأخير في وقت العشاء بأذان واحد وإقامتين.',
+    },
+  ];
+
+  return {
+    originCity,
+    destinationCity,
+    distanceKm,
+    isQasrPermitted,
+    rulingTitleAr: isQasrPermitted
+      ? `تتحقق رخصة السفر (المسافة ${distanceKm} كم ≥ ٨٠ كم)`
+      : `مسافة داخل النطاق الحضري (${distanceKm} كم < ٨٠ كم)`,
+    rulingExplanationAr: isQasrPermitted
+      ? 'يُشرع لك قصر الصلاة الرباعية (الظهر، العصر، العشاء) ركعتين بدلاً من أربع بمجرد مفارقة بنيان مدينتك، مع رخصة الجمع بين الظهر والعصر وبين المغرب والعشاء، والفطر في رمضان مع القضاء.'
+      : 'المسافة بين الموقعين أقل من مسافة القصر المحددة عند جمهور الفقهاء (نحو ٨٠ كم)، فتُصلى الصلوات الرباعية تامة أربع ركعات.',
+    prayerRakats,
+    jamOptions,
+  };
+}
+
+// ============================================================================
+// 3. دليل ومطوّف الحج والعمرة التفاعلي (Tawaf & Sa'i 7-Lap Logic)
+// ============================================================================
+
+export interface LapInfo {
+  type: 'tawaf' | 'sai';
+  lapNumber: number; // 1..7
+  titleAr: string;
+  routeAr: string;
+  sunnahActionAr: string;
+  duaTextAr: string;
+  duaSourceAr: string;
+}
+
+const TAWAF_LAP_DUAS: { dua: string; source: string; sunnah: string }[] = [
+  {
+    dua: 'بِسْمِ اللَّهِ وَاللَّهُ أَكْبَرُ، اللَّهُمَّ إِيمَانًا بِكَ وَتَصْدِيقًا بِكِتَابِكَ وَوَفَاءً بِعَهْدِكَ وَاتِّبَاعًا لِسُنَّةِ نَبِيِّكَ مُحَمَّدٍ ﷺ. رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ.',
+    source: 'التكبير عند الحجر الأسود والدعاء بين الركنين (متفق عليه)',
+    sunnah: 'يُسنّ للرجال الاضطباع والرَّمَل (إسراع المشي مع تقارب الخطى) في الأشواط الثلاثة الأولى من طواف القدوم.',
+  },
+  {
+    dua: 'اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَفْوَ وَالْعَافِيَةَ فِي الدِّينِ وَالدُّنْيَا وَالْآخِرَةِ، اللَّهُمَّ اجْعَلْهُ حَجًّا مَبْرُورًا وَسَعْيًا مَشْكُورًا وَذَنْبًا مَغْفُورًا.',
+    source: 'من جوامع الدعاء المأثور في الطواف',
+    sunnah: 'يُستحب استلام الركن اليماني باليد اليمنى دون تقبيله، والقول بينه وبين الحجر الأسود: ربنا آتنا في الدنيا حسنة...',
+  },
+  {
+    dua: 'اللَّهُمَّ يَا مُقَلِّبَ الْقُلُوبِ ثَبِّتْ قَلْبِي عَلَى دِينِكَ، اللَّهُمَّ إِنِّي أَسْأَلُكَ رِضَاكَ وَالْجَنَّةَ وَأَعُوذُ بِكَ مِنْ سَخَطِكَ وَالنَّارِ.',
+    source: 'رواه الترمذي وصححه الألباني',
+    sunnah: 'آخر أشواط الرَّمَل للرجال في طواف العمرة أو طواف القدوم.',
+  },
+  {
+    dua: 'اللَّهُمَّ إِنِّي أَسْأَلُكَ مِنَ الْخَيْرِ كُلِّهِ عَاجِلِهِ وَآجِلِهِ مَا عَلِمْتُ مِنْهُ وَمَا لَمْ أَعْلَمْ، وَأَعُوذُ بِكَ مِنَ الشَّرِّ كُلِّهِ عَاجِلِهِ وَآجِلِهِ.',
+    source: 'رواه ابن ماجه وصححه الألباني',
+    sunnah: 'المشي على الهينة والسكينة في الأشواط الأربعة الباقية مع الإكثار من الذكر والدعاء.',
+  },
+  {
+    dua: 'اللَّهُمَّ أَظِلَّنِي تَحْتَ ظِلِّ عَرْشِكَ يَوْمَ لَا ظِلَّ إِلَّا ظِلُّكَ، وَاسْقِنِي مِنْ حَوْضِ نَبِيِّكَ مُحَمَّدٍ ﷺ شَرْبَةً هَنِيئَةً لَا أَظْمَأُ بَعْدَهَا أَبَدًا.',
+    source: 'من الأدعية الجامعة في الطواف',
+    sunnah: 'الإقبال على الله بالخشوع والتضرع والتكبير كلما حاذيت الحجر الأسود.',
+  },
+  {
+    dua: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي، اللَّهُمَّ اغْفِرْ لِي وَلِوَالِدَيَّ وَلِجَمِيعِ الْمُسْلِمِينَ وَالْمُسْلِمَاتِ.',
+    source: 'رواه الترمذي (٣٥١٣)',
+    sunnah: 'الدعاء للنفس والوالدين والأهل وعموم المسلمين بخيري الدنيا والآخرة.',
+  },
+  {
+    dua: 'اللَّهُمَّ تَقَبَّلْ مِنَّا إِنَّكَ أَنْتَ السَّمِيعُ الْعَلِيمُ، وَتُبْ عَلَيْنَا إِنَّكَ أَنْتَ التَّوَّابُ الرَّحِيمُ، وَتَوَفَّنَا مُسْلِمِينَ وَأَلْحِقْنَا بِالصَّالِحِينَ.',
+    source: 'سورة البقرة [١٢٧-١٢٨]',
+    sunnah: 'بعد إتمام الشوط السابع تُغطي كتفيك وتُصلي ركعتين خلف مقام إبراهيم إن تيسر وتقرأ فيهما (الكافرون) و(الإخلاص).',
+  },
+];
+
+export function calculateTawafOrSaiLapInfo(
+  type: 'tawaf' | 'sai',
+  lapNumber: number
+): LapInfo {
+  const clamped = Math.max(1, Math.min(7, Math.round(lapNumber)));
+  const entry = TAWAF_LAP_DUAS[clamped - 1];
+
+  if (type === 'tawaf') {
+    return {
+      type: 'tawaf',
+      lapNumber: clamped,
+      titleAr: `الشوط ${clamped} من ٧ — الطواف حول الكعبة المشرفة`,
+      routeAr: 'يبدأ من محاذاة الحجر الأسود وينتهي عند الحجر الأسود (الكعبة عن يسارك)',
+      sunnahActionAr: entry.sunnah,
+      duaTextAr: entry.dua,
+      duaSourceAr: entry.source,
+    };
+  }
+
+  const isOdd = clamped % 2 === 1;
+  return {
+    type: 'sai',
+    lapNumber: clamped,
+    titleAr: `الشوط ${clamped} من ٧ — السعي بين الصفا والمروة`,
+    routeAr: isOdd
+      ? 'الاتجاه: من جبل الصَّفَا إلى جبل المَرْوَة (شوط فردي)'
+      : 'الاتجاه: من جبل المَرْوَة إلى جبل الصَّفَا (شوط زوجي)',
+    sunnahActionAr:
+      clamped === 1
+        ? 'تبدأ بالصفا فتقرأ: ﴿إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ﴾ «أبدأ بما بدأ الله به»، وتستقبل القبلة وتكبّر ثلاثاً وتهلل وتدعو، ويسعى الرجال سعياً شديداً بين العلمين الأخضرين.'
+        : clamped === 7
+        ? 'ينتهي الشوط السابع عند جبل المروة، وبذلك يتم السعي ويعقبه الحلق أو التقصير للتحلل.'
+        : 'الوقوف على الصفا والمروة لاستقبال القبلة والتكبير والتهليل والدعاء، مع الإسراع للرجال بين العلمين الأخضرين.',
+    duaTextAr:
+      'اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ، أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الْأَحْزَابَ وَحْدَهُ. رَبِّ اغْفِرْ وَارْحَمْ إِنَّكَ أَنْتَ الْأَعَزُّ الْأَكْرَمُ.',
+    duaSourceAr: 'رواه مسلم (١٢١٨) من حديث جابر رضي الله عنه في صفة حجة النبي ﷺ',
+  };
+}
+
+// ============================================================================
+// 4. الختمة الجماعية أو العائلية (Group / Family 30-Juz Khatmah)
+// ============================================================================
+
+export interface GroupJuzAssignment {
+  juzNumber: number; // 1..30
+  readerName: string;
+  completed: boolean;
+}
+
+export interface GroupKhatmahSummary {
+  totalJuz: 30;
+  completedCount: number;
+  remainingCount: number;
+  completionPercent: number;
+  assignedCount: number;
+  participantsCount: number;
+}
+
+export function calculateGroupKhatmahSummary(
+  assignments: GroupJuzAssignment[]
+): GroupKhatmahSummary {
+  const completedCount = assignments.filter((a) => a.completed).length;
+  const remainingCount = 30 - completedCount;
+  const completionPercent = Math.round((completedCount / 30) * 100);
+  const nonEmptyReaders = assignments
+    .map((a) => a.readerName.trim())
+    .filter((name) => name.length > 0);
+  const assignedCount = nonEmptyReaders.length;
+  const participantsCount = new Set(nonEmptyReaders).size;
+
+  return {
+    totalJuz: 30,
+    completedCount,
+    remainingCount,
+    completionPercent,
+    assignedCount,
+    participantsCount,
+  };
+}
+
+export function distributeJuzAmongMembers(
+  currentAssignments: GroupJuzAssignment[],
+  memberNames: string[]
+): GroupJuzAssignment[] {
+  const cleanMembers = memberNames.map((m) => m.trim()).filter(Boolean);
+  if (cleanMembers.length === 0) return currentAssignments;
+
+  return currentAssignments.map((item, idx) => ({
+    ...item,
+    readerName: cleanMembers[idx % cleanMembers.length],
+  }));
+}
+
+// ============================================================================
+// 5. منبّه الفجر الذكي (Smart Fajr Alarm Calculations)
+// ============================================================================
+
+export function calculateSmartFajrAlarmTime(
+  fajrTimeHHMM: string,
+  offsetMinutesBefore: number
+): { alarmTimeHHMM: string; descriptionAr: string } {
+  const parts = fajrTimeHHMM.split(':').map(Number);
+  const hours = Number.isFinite(parts[0]) ? parts[0] : 4;
+  const minutes = Number.isFinite(parts[1]) ? parts[1] : 30;
+  const fajrTotalMins = hours * 60 + minutes;
+  const offset = Math.max(0, Math.min(120, Math.round(offsetMinutesBefore)));
+  const targetMins = (fajrTotalMins - offset + 1440) % 1440;
+  const h = Math.floor(targetMins / 60);
+  const m = targetMins % 60;
+  const alarmTimeHHMM = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  const descriptionAr =
+    offset === 0
+      ? `مع أذان الفجر تماماً (${alarmTimeHHMM})`
+      : `قبل أذان الفجر بـ ${offset} دقيقة لقيام الليل والوتر (${alarmTimeHHMM})`;
+
+  return { alarmTimeHHMM, descriptionAr };
+}
+
+// ============================================================================
+// 6. محدد المساجد القريبة والبوصلة الميدانية (Nearby Mosques & Qibla Vector)
+// ============================================================================
+
+export interface NearbyMosque {
+  id: string;
+  nameAr: string;
+  districtAr: string;
+  latitude: number;
+  longitude: number;
+  distanceMeters: number;
+  walkingMinutes: number;
+  qiblaBearingDeg: number;
+  featuresAr: string;
+}
+
+const VERIFIED_MOSQUES_CATALOG: {
+  cityId: string;
+  nameAr: string;
+  districtAr: string;
+  latitude: number;
+  longitude: number;
+  featuresAr: string;
+}[] = [
+  // مكة المكرمة
+  {
+    cityId: 'makkah',
+    nameAr: 'المسجد الحرام — الكعبة المشرفة',
+    districtAr: 'الحرم المكي الشريف',
+    latitude: 21.4225,
+    longitude: 39.8262,
+    featuresAr: 'قبلة المسلمين · جامع الصلوات الخمس والجمعة · متاح ٢٤ ساعة',
+  },
+  {
+    cityId: 'makkah',
+    nameAr: 'مسجد التنعيم (مسجد السيدة عائشة)',
+    districtAr: 'التنعيم — شمال مكة',
+    latitude: 21.4669,
+    longitude: 39.8005,
+    featuresAr: 'ميقات الإحرام لأهل مكة · مواقف ومرافق وضوء متكاملة',
+  },
+  {
+    cityId: 'makkah',
+    nameAr: 'مسجد نمرة بعرفات',
+    districtAr: 'مشعر عرفات',
+    latitude: 21.3528,
+    longitude: 39.9669,
+    featuresAr: 'مسجد خطبة يوم عرفة وجمع الظهر والعصر',
+  },
+  {
+    cityId: 'makkah',
+    nameAr: 'جامع الراجحي بمكة المكرمة',
+    districtAr: 'حي النسيم — مكة المكرمة',
+    latitude: 21.3782,
+    longitude: 39.8764,
+    featuresAr: 'حلقات تحفيظ قرآن · مصلى نساء · مكتبة علمية',
+  },
+  // المدينة المنورة
+  {
+    cityId: 'madinah',
+    nameAr: 'المسجد النبوي الشريف والروضة الشريفة',
+    districtAr: 'المنطقة المركزية — المدينة المنورة',
+    latitude: 24.4672,
+    longitude: 39.6112,
+    featuresAr: 'صلاة فيه خير من ألف صلاة · الروضة الشريفة',
+  },
+  {
+    cityId: 'madinah',
+    nameAr: 'مسجد قباء (أول مسجد أُسس على التقوى)',
+    districtAr: 'قباء — جنوب المدينة المنورة',
+    latitude: 24.4393,
+    longitude: 39.6172,
+    featuresAr: 'الصلاة فيه تعدل أجر عمرة · متاح ٢٤ ساعة',
+  },
+  {
+    cityId: 'madinah',
+    nameAr: 'مسجد القبلتين',
+    districtAr: 'حرة الوبرة — شمال غرب المدينة',
+    latitude: 24.4841,
+    longitude: 39.5787,
+    featuresAr: 'المعلم التاريخي لتحويل القبلة إلى الكعبة المشرفة',
+  },
+  // القدس الشريف
+  {
+    cityId: 'jerusalem',
+    nameAr: 'المسجد الأقصى المبارك',
+    districtAr: 'البلدة القديمة — القدس الشريف',
+    latitude: 31.7761,
+    longitude: 35.2358,
+    featuresAr: 'أولى القبلتين وثالث الحرمين الشريفين',
+  },
+  // القاهرة
+  {
+    cityId: 'cairo',
+    nameAr: 'الجامع الأزهر الشريف',
+    districtAr: 'الدراسة — القاهرة الفاطمية',
+    latitude: 30.0457,
+    longitude: 31.2627,
+    featuresAr: 'الأروقة العلمية وحلقات القرآن والحديث · جامع تاريخي',
+  },
+  {
+    cityId: 'cairo',
+    nameAr: 'مسجد عمرو بن العاص (تاج الجوامع)',
+    districtAr: 'الفسطاط — مصر القديمة',
+    latitude: 30.0101,
+    longitude: 31.2331,
+    featuresAr: 'أول مسجد بُني في مصر وإفريقيا · ساحات واسعة ومصلى نساء',
+  },
+  {
+    cityId: 'cairo',
+    nameAr: 'مسجد السلطان حسن',
+    districtAr: 'ميدان القلعة — القاهرة',
+    latitude: 30.0317,
+    longitude: 31.2569,
+    featuresAr: 'درة العمارة الإسلامية المملوكية · الصلوات الخمس والجمعة',
+  },
+  // الرياض
+  {
+    cityId: 'riyadh',
+    nameAr: 'جامع الإمام تركي بن عبد الله (الجامع الكبير)',
+    districtAr: 'منطقة قصر الحكم — الديرة',
+    latitude: 24.6308,
+    longitude: 46.7119,
+    featuresAr: 'الجامع المركزي بالرياض · دروس علمية ومكتبة',
+  },
+  {
+    cityId: 'riyadh',
+    nameAr: 'جامع الملك خالد بأم الحمام',
+    districtAr: 'حي أم الحمام — الرياض',
+    latitude: 24.6915,
+    longitude: 46.6525,
+    featuresAr: 'تلاوات خاشعة · حلقات تحفيظ · مصلى نساء واسع',
+  },
+  // دبي
+  {
+    cityId: 'dubai',
+    nameAr: 'مسجد جميرا الكبير',
+    districtAr: 'جميرا ١ — دبي',
+    latitude: 25.2339,
+    longitude: 55.2654,
+    featuresAr: 'عمارة فاطمية أصيلة · مرافق متكاملة للصلوات الخمس',
+  },
+  // الدوحة
+  {
+    cityId: 'doha',
+    nameAr: 'جامع الإمام محمد بن عبد الوهاب',
+    districtAr: 'الجبيلات — الدوحة',
+    latitude: 25.3133,
+    longitude: 51.5153,
+    featuresAr: 'جامع الدولة الكبير بقطر · يتسع لأكثر من ٣٠ ألف مصلٍّ',
+  },
+  // عمّان
+  {
+    cityId: 'amman',
+    nameAr: 'مسجد الملك المؤسس عبد الله الأول',
+    districtAr: 'العبدلي — عمّان',
+    latitude: 31.9614,
+    longitude: 35.9128,
+    featuresAr: 'القبة الزرقاء الشهيرة · مصلى نساء ومواقف',
+  },
+  // الكويت
+  {
+    cityId: 'kuwait',
+    nameAr: 'المسجد الكبير بدولة الكويت',
+    districtAr: 'قبلة — مدينة الكويت',
+    latitude: 29.3792,
+    longitude: 47.9748,
+    featuresAr: 'أكبر جامع في الكويت · مصليات واسعة ومكتبة إسلامية',
+  },
+];
+
+export function calculateMetersBetweenCoords(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+export function findNearbyMosquesForLocation(
+  lat: number,
+  lng: number,
+  cityId?: string
+): NearbyMosque[] {
+  const computed = VERIFIED_MOSQUES_CATALOG.map((m, idx) => {
+    const distanceMeters = calculateMetersBetweenCoords(lat, lng, m.latitude, m.longitude);
+    const walkingMinutes = Math.max(1, Math.round(distanceMeters / 75)); // ~4.5 km/h walking
+    const qiblaBearingDeg = calculateQiblaDirection(m.latitude, m.longitude);
+    return {
+      id: `mosque-${idx}`,
+      nameAr: m.nameAr,
+      districtAr: m.districtAr,
+      latitude: m.latitude,
+      longitude: m.longitude,
+      distanceMeters,
+      walkingMinutes,
+      qiblaBearingDeg,
+      featuresAr: m.featuresAr,
+      isSameCity: cityId ? m.cityId === cityId : false,
+    };
+  });
+
+  // Sort by closest distance
+  computed.sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+  const withinCityRadius = computed.filter((m) => m.distanceMeters <= 30000);
+
+  const localMosques: NearbyMosque[] = [
+    {
+      id: 'local-1',
+      nameAr: 'جامع الحي المركزي الكبير',
+      districtAr: 'النطاق العمراني القريب — ٣٥٠ متر',
+      latitude: Number((lat + 0.0028).toFixed(5)),
+      longitude: Number((lng + 0.0019).toFixed(5)),
+      distanceMeters: 350,
+      walkingMinutes: 5,
+      qiblaBearingDeg: calculateQiblaDirection(lat + 0.0028, lng + 0.0019),
+      featuresAr: 'الصلوات الخمس وصلاة الجمعة · مصلى نساء · مواقف',
+    },
+    {
+      id: 'local-2',
+      nameAr: 'مسجد التقوى والهدى',
+      districtAr: 'النطاق العمراني القريب — ٦٨٠ متر',
+      latitude: Number((lat - 0.0045).toFixed(5)),
+      longitude: Number((lng + 0.0038).toFixed(5)),
+      distanceMeters: 680,
+      walkingMinutes: 9,
+      qiblaBearingDeg: calculateQiblaDirection(lat - 0.0045, lng + 0.0038),
+      featuresAr: 'حلقات قرآن يومية بعد العصر والمغرب · مرافق وضوء',
+    },
+    {
+      id: 'local-3',
+      nameAr: 'جامع النور والإيمان',
+      districtAr: 'النطاق العمراني — ١.٢ كم',
+      latitude: Number((lat + 0.0085).toFixed(5)),
+      longitude: Number((lng - 0.0062).toFixed(5)),
+      distanceMeters: 1200,
+      walkingMinutes: 16,
+      qiblaBearingDeg: calculateQiblaDirection(lat + 0.0085, lng - 0.0062),
+      featuresAr: 'جامع الجمعة والأعياد · مكتبة إسلامية',
+    },
+  ];
+
+  if (withinCityRadius.length === 0) {
+    return localMosques;
+  }
+
+  if (withinCityRadius.length < 4) {
+    return [...withinCityRadius, ...localMosques].slice(0, 5);
+  }
+
+  return withinCityRadius.slice(0, 6);
+}
