@@ -135,7 +135,7 @@ export const ALERT_SOUND_OPTIONS: AlertSoundSpec[] = [
     nameAr: 'الأذان الشرعي المعتمد',
     descriptionAr: 'تشغيل صوت الأذان المعتمد مباشرة عند دخول وقت الصلاة بدون إظهار اسم الملف',
     category: 'custom_audio',
-    audioUrl: '/adhan.wav',
+    audioUrl: './adhan.wav',
     frequenciesHz: [293.66, 440.0, 392.0, 369.99, 293.66],
     durationMs: 14000,
   },

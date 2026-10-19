@@ -362,7 +362,7 @@ export default function App() {
             ))}
             <span aria-hidden="true" className="text-stone-300">|</span>
             <a
-              href="/privacy-policy.html"
+              href="./privacy-policy.html"
               className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap"
             >
               سياسة الخصوصية
