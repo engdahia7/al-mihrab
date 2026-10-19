@@ -1084,3 +1084,264 @@ export function findNearbyMosquesForLocation(
 
   return withinCityRadius.slice(0, 6);
 }
+
+// ============================================================================
+// 7. محرك المسبحة المحرابية التفاعلية (33-Bead Interactive Misbahah Engine)
+// ============================================================================
+
+export interface MasbahaPhraseSpec {
+  id: string;
+  titleAr: string;
+  textAr: string;
+  hadithAr: string;
+  defaultTarget: number;
+  isGuidedPostPrayer?: boolean;
+}
+
+export const MASBAHA_PHRASES: MasbahaPhraseSpec[] = [
+  {
+    id: 'subhanallah_wabihamdihi',
+    titleAr: 'سبحان الله وبحمده',
+    textAr: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ',
+    hadithAr:
+      '«كلمتان خفيفتان على اللسان، ثقيلتان في الميزان، حبيبتان إلى الرحمن» — متفق عليه (البخاري ٦٤٠٦، مسلم ٢٦٩٤)',
+    defaultTarget: 100,
+  },
+  {
+    id: 'post_prayer_sunnah',
+    titleAr: 'تسبيح دبر الصلوات المفروضة (٣٣×٣ + تمام المائة)',
+    textAr: 'سُبْحَانَ اللَّهِ (٣٣) · الْحَمْدُ لِلَّهِ (٣٣) · اللَّهُ أَكْبَرُ (٣٣) · تمام المائة',
+    hadithAr:
+      'قال ﷺ: «مَن سبَّح الله في دُبُر كل صلاة ثلاثاً وثلاثين، وحمد الله ثلاثاً وثلاثين، وكبَّر الله ثلاثاً وثلاثين، فتلك تسعة وتسعون، وقال تمام المائة: لا إله إلا الله وحده لا شريك له... غُفرت خطاياه وإن كانت مثل زبد البحر» — رواه مسلم (٥٩٧)',
+    defaultTarget: 100,
+    isGuidedPostPrayer: true,
+  },
+  {
+    id: 'istighfar',
+    titleAr: 'الاستغفار والتوبة',
+    textAr: 'أَسْتَغْفِرُ اللَّهَ الْعَظِيمَ وَأَتُوبُ إِلَيْهِ',
+    hadithAr:
+      'قال ﷺ: «والله إني لأستغفر الله وأتوب إليه في اليوم أكثر من سبعين مرّة» — رواه البخاري (٦٣٠٧)',
+    defaultTarget: 100,
+  },
+  {
+    id: 'hawqalah',
+    titleAr: 'الحوقلة (كنز من كنوز الجنة)',
+    textAr: 'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ',
+    hadithAr:
+      'قال ﷺ لأبي موسى الأشعري: «ألا أدلّك على كنزٍ من كنوز الجنة؟ لا حول ولا قوة إلا بالله» — متفق عليه',
+    defaultTarget: 33,
+  },
+  {
+    id: 'salawat',
+    titleAr: 'الصلاة على النبي ﷺ',
+    textAr: 'اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ',
+    hadithAr:
+      'قال ﷺ: «مَن صلّى عليَّ صلاةً واحدة صلّى الله عليه عشر صلوات» — رواه مسلم (٤٠٨)',
+    defaultTarget: 100,
+  },
+  {
+    id: 'tahlil_mihrab',
+    titleAr: 'التهليل والتوحيد الجامع',
+    textAr:
+      'لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ',
+    hadithAr:
+      'قال ﷺ: «مَن قالها في يوم مائة مرة كانت له عدل عشر رقاب، وكُتبت له مائة حسنة، ومُحيت عنه مائة سيئة» — متفق عليه',
+    defaultTarget: 100,
+  },
+  {
+    id: 'yunus_dua',
+    titleAr: 'دعاء ذي النون (تفريج الكروب)',
+    textAr: 'لَا إِلَٰهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنْتُ مِنَ الظَّالِمِينَ',
+    hadithAr:
+      'قال ﷺ: «دعوة ذي النون إذ دعا وهو في بطن الحوت... فإنه لم يدعُ بها رجل مسلم في شيء قط إلا استجاب الله له» — صححه الترمذي (٣٥٠٥)',
+    defaultTarget: 33,
+  },
+];
+
+export interface PostPrayerStageInfo {
+  stageIndex: 1 | 2 | 3 | 4;
+  stageTitleAr: string;
+  currentPhraseAr: string;
+  countInStage: number;
+  stageTarget: number;
+}
+
+export interface MasbahaComputedState {
+  sessionCount: number;
+  target: number;
+  litBeadsCount: number; // 0..33
+  activeBeadIndex: number; // -1 when 0, else 0..32
+  completedRoundsOf33: number;
+  completedTargetRounds: number;
+  progressPercent: number; // 0..100
+  isTargetMilestoneReached: boolean;
+  is33CycleMilestoneReached: boolean;
+  activeDisplayPhraseAr: string;
+  postPrayerStage: PostPrayerStageInfo | null;
+}
+
+export function getPostPrayerTasbihStage(sessionCount: number): PostPrayerStageInfo {
+  const cyclePos = Math.max(0, sessionCount) % 100;
+  if (cyclePos < 33) {
+    return {
+      stageIndex: 1,
+      stageTitleAr: 'التسبيح (١ - ٣٣)',
+      currentPhraseAr: 'سُبْحَانَ اللَّهِ',
+      countInStage: cyclePos,
+      stageTarget: 33,
+    };
+  }
+  if (cyclePos < 66) {
+    return {
+      stageIndex: 2,
+      stageTitleAr: 'التحميد (٣٤ - ٦٦)',
+      currentPhraseAr: 'الْحَمْدُ لِلَّهِ',
+      countInStage: cyclePos - 33,
+      stageTarget: 33,
+    };
+  }
+  if (cyclePos < 99) {
+    return {
+      stageIndex: 3,
+      stageTitleAr: 'التكبير (٦٧ - ٩٩)',
+      currentPhraseAr: 'اللَّهُ أَكْبَرُ',
+      countInStage: cyclePos - 66,
+      stageTarget: 33,
+    };
+  }
+  return {
+    stageIndex: 4,
+    stageTitleAr: 'تمام المائة (١٠٠)',
+    currentPhraseAr:
+      'لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ',
+    countInStage: 1,
+    stageTarget: 1,
+  };
+}
+
+export function calculateMasbahaState(
+  sessionCount: number,
+  target: number,
+  phraseSpec: MasbahaPhraseSpec
+): MasbahaComputedState {
+  const safeCount = Math.max(0, Math.floor(sessionCount));
+  const safeTarget = Math.max(0, Math.floor(target));
+
+  const litBeadsCount = safeCount === 0 ? 0 : ((safeCount - 1) % 33) + 1;
+  const activeBeadIndex = safeCount === 0 ? -1 : (safeCount - 1) % 33;
+  const completedRoundsOf33 = Math.floor(safeCount / 33);
+  const completedTargetRounds =
+    safeTarget > 0 ? Math.floor(safeCount / safeTarget) : 0;
+
+  let progressPercent = 0;
+  if (safeTarget > 0 && safeCount > 0) {
+    const remainder = safeCount % safeTarget;
+    const effective = remainder === 0 ? safeTarget : remainder;
+    progressPercent = Math.min(100, Math.round((effective / safeTarget) * 100));
+  } else if (safeTarget === 0 && safeCount > 0) {
+    progressPercent = Math.min(100, Math.round((litBeadsCount / 33) * 100));
+  }
+
+  const isTargetMilestoneReached =
+    safeCount > 0 && safeTarget > 0 && safeCount % safeTarget === 0;
+  const is33CycleMilestoneReached = safeCount > 0 && safeCount % 33 === 0;
+
+  const postPrayerStage = phraseSpec.isGuidedPostPrayer
+    ? getPostPrayerTasbihStage(safeCount)
+    : null;
+
+  const activeDisplayPhraseAr = postPrayerStage
+    ? postPrayerStage.currentPhraseAr
+    : phraseSpec.textAr;
+
+  return {
+    sessionCount: safeCount,
+    target: safeTarget,
+    litBeadsCount,
+    activeBeadIndex,
+    completedRoundsOf33,
+    completedTargetRounds,
+    progressPercent,
+    isTargetMilestoneReached,
+    is33CycleMilestoneReached,
+    activeDisplayPhraseAr,
+    postPrayerStage,
+  };
+}
+
+/**
+ * Synthesizes a subtle tactile wooden/amber Masbahah bead click or milestone chime
+ * using Web Audio API and triggers soft mobile haptic feedback when enabled.
+ */
+export function triggerMasbahaTactileFeedback(options: {
+  soundEnabled: boolean;
+  hapticEnabled: boolean;
+  isMilestone: boolean;
+}): void {
+  if (typeof window === 'undefined') return;
+
+  if (options.hapticEnabled && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(options.isMilestone ? [30, 45, 55] : 12);
+    } catch {
+      // Ignore vibration errors on unsupported browsers
+    }
+  }
+
+  if (!options.soundEnabled) return;
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    if (options.isMilestone) {
+      // Gentle two-note warm harmonic chime on completing 33 or target
+      const freqs = [528, 660];
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+        gain.gain.setValueAtTime(0.001, now + idx * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.11, now + idx * 0.09 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.09 + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.09);
+        osc.stop(now + idx * 0.09 + 0.34);
+      });
+      window.setTimeout(() => {
+        ctx.close().catch(() => {});
+      }, 550);
+    } else {
+      // Soft wooden bead click (short pitch-drop impulse)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(340, now);
+      osc.frequency.exponentialRampToValueAtTime(125, now + 0.028);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.032);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.035);
+      window.setTimeout(() => {
+        ctx.close().catch(() => {});
+      }, 100);
+    }
+  } catch {
+    // Ignore Web Audio restrictions
+  }
+}
+

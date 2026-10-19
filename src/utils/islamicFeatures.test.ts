@@ -8,6 +8,9 @@ import {
   distributeJuzAmongMembers,
   calculateSmartFajrAlarmTime,
   findNearbyMosquesForLocation,
+  MASBAHA_PHRASES,
+  calculateMasbahaState,
+  getPostPrayerTasbihStage,
 } from './islamicFeatures.ts';
 import { VERIFIED_CITIES } from './astronomy.ts';
 
@@ -139,4 +142,34 @@ test('Nearby Mosques Finder: returns sorted mosques with walking time and Qibla 
   assert.ok(mosques.length >= 3);
   assert.ok(mosques[0].nameAr.includes('المسجد الحرام'));
   assert.ok(mosques[0].walkingMinutes >= 1);
+});
+
+test('Masbahah 33-Bead Engine: tracks lit beads, 33-cycle milestones, and guided post-prayer stages', () => {
+  const postPrayerSpec = MASBAHA_PHRASES.find((p) => p.id === 'post_prayer_sunnah')!;
+  assert.ok(postPrayerSpec);
+
+  const st0 = calculateMasbahaState(0, 100, postPrayerSpec);
+  assert.equal(st0.litBeadsCount, 0);
+  assert.equal(st0.activeBeadIndex, -1);
+  assert.equal(st0.postPrayerStage?.stageIndex, 1);
+  assert.equal(st0.activeDisplayPhraseAr, 'سُبْحَانَ اللَّهِ');
+
+  const st33 = calculateMasbahaState(33, 100, postPrayerSpec);
+  assert.equal(st33.litBeadsCount, 33);
+  assert.equal(st33.completedRoundsOf33, 1);
+  assert.equal(st33.is33CycleMilestoneReached, true);
+  assert.equal(st33.postPrayerStage?.stageIndex, 2);
+  assert.equal(st33.activeDisplayPhraseAr, 'الْحَمْدُ لِلَّهِ');
+
+  const st66 = getPostPrayerTasbihStage(66);
+  assert.equal(st66.stageIndex, 3);
+  assert.equal(st66.currentPhraseAr, 'اللَّهُ أَكْبَرُ');
+
+  const st99 = getPostPrayerTasbihStage(99);
+  assert.equal(st99.stageIndex, 4);
+  assert.ok(st99.currentPhraseAr.includes('لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ'));
+
+  const st100 = calculateMasbahaState(100, 100, postPrayerSpec);
+  assert.equal(st100.isTargetMilestoneReached, true);
+  assert.equal(st100.progressPercent, 100);
 });
