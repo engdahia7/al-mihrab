@@ -8,7 +8,7 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/utils/astronomy.test.ts src/utils/khatmahAndAlerts.test.ts src/utils/islamicFeatures.test.ts src/utils/offlineQuranStorage.test.ts src/utils/widgetEngine.test.ts src/utils/radioPlayer.test.ts src/utils/geolocationService.test.ts src/utils/quranStudyTools.test.ts",
+    "test": "tsx --test src/utils/astronomy.test.ts src/utils/khatmahAndAlerts.test.ts src/utils/islamicFeatures.test.ts src/utils/offlineQuranStorage.test.ts src/utils/widgetEngine.test.ts src/utils/radioPlayer.test.ts src/utils/geolocationService.test.ts src/utils/quranStudyTools.test.ts",
     "clean": "rm -rf dist dev-dist server.js",
     "lint": "tsc --noEmit",
     "twa:init": "npx @bubblewrap/cli init --manifest=/manifest.webmanifest",
