@@ -235,6 +235,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
     time: 0,
     active: false,
   });
+  const didSwipeRef = useRef<boolean>(false);
   const [dragOffsetX, setDragOffsetX] = useState<number>(0);
   const [pageTurnToast, setPageTurnToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -956,10 +957,11 @@ export const QuranView: React.FC<QuranViewProps> = ({
   };
 
   // =========================================================================
-  // TOUCH & MOUSE SWIPE GESTURE HANDLERS (Right & Left Page Turning)
+  // TOUCH, MOUSE & KEYBOARD SWIPE GESTURE HANDLERS (Right & Left Page Turning)
   // =========================================================================
   const handleGestureStart = (clientX: number, clientY: number) => {
     if (activeOverlay !== 'none') return;
+    didSwipeRef.current = false;
     gestureStartRef.current = {
       x: clientX,
       y: clientY,
@@ -973,8 +975,11 @@ export const QuranView: React.FC<QuranViewProps> = ({
     if (!gestureStartRef.current.active || activeOverlay !== 'none') return;
     const dx = clientX - gestureStartRef.current.x;
     const dy = clientY - gestureStartRef.current.y;
-    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-      const damped = Math.max(-95, Math.min(95, dx * 0.45));
+    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+      didSwipeRef.current = true;
+    }
+    if (Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy) * 0.75) {
+      const damped = Math.max(-110, Math.min(110, dx * 0.55));
       setDragOffsetX(damped);
     }
   };
@@ -987,17 +992,40 @@ export const QuranView: React.FC<QuranViewProps> = ({
     gestureStartRef.current.active = false;
     setDragOffsetX(0);
 
-    const nextPage = resolveMushafSwipePage(selectedPageNum, dx, dy, 38);
+    const nextPage = resolveMushafSwipePage(selectedPageNum, dx, dy, 22);
     if (nextPage !== selectedPageNum) {
+      didSwipeRef.current = true;
       handleSelectPage(nextPage, true);
       return;
     }
 
-    // If it was a clean short tap (not a swipe or scroll), toggle the floating HUD
+    // If it was a clean short tap on empty margin (not a swipe or scroll), toggle the floating HUD
     if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && elapsed < 600) {
       setShowHud((prev) => !prev);
     }
   };
+
+  // Support Left / Right keyboard arrows for instant page turning
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (activeOverlay !== 'none') return;
+      if (
+        document.activeElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleSelectPage(Math.min(604, selectedPageNum + 1), true);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleSelectPage(Math.max(1, selectedPageNum - 1), true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeOverlay, selectedPageNum]);
 
   const fontSizeClass =
     fontSizeLevel === 1
@@ -1070,7 +1098,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 ${themeStyles.outerBg} overflow-y-auto overflow-x-hidden select-none flex flex-col justify-between p-1.5 sm:p-4 transition-colors duration-200`}
+      className={`fixed inset-0 z-50 ${themeStyles.outerBg} overflow-y-auto overflow-x-hidden touch-pan-y select-none flex flex-col justify-between p-1.5 sm:p-4 transition-colors duration-200`}
       dir="rtl"
       data-testid="mushaf-fullscreen-root"
       data-theme={mushafTheme}
@@ -1514,6 +1542,10 @@ export const QuranView: React.FC<QuranViewProps> = ({
                               data-testid={`mushaf-ayah-${sMeta.number}-${ayah.numberInSurah}`}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (didSwipeRef.current) {
+                                  didSwipeRef.current = false;
+                                  return;
+                                }
                                 setSelectedAyahRef({
                                   surahNumber: sMeta.number,
                                   ayahNumber: ayah.numberInSurah,
@@ -1521,8 +1553,6 @@ export const QuranView: React.FC<QuranViewProps> = ({
                                 setShareCardDataUrl(null);
                                 setActiveOverlay('tafsir');
                               }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onTouchStart={(e) => e.stopPropagation()}
                               title="اضغط لعرض التفسير أو حفظ التوقف عند هذه الآية للاستكمال لاحقاً"
                               className={`inline cursor-pointer rounded px-1 py-0.5 transition-colors ${
                                 isStopHere
@@ -1564,14 +1594,48 @@ export const QuranView: React.FC<QuranViewProps> = ({
               </div>
             )}
 
-            {/* Mushaf Bottom Page Number */}
-            <div className="pt-2.5 border-t border-[#E2D6C1]/40 flex items-center justify-center cursor-pointer">
-              <span
-                className={`text-xs sm:text-sm font-bold ${themeStyles.footerSub} whitespace-nowrap`}
-                data-testid="mushaf-footer-page-num"
+            {/* Mushaf Bottom Page Number & Instant Page Turn Controls */}
+            <div
+              className="pt-2.5 border-t border-[#E2D6C1]/40 flex items-center justify-between gap-2"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                data-testid="mushaf-prev-page-btn"
+                disabled={selectedPageNum <= 1}
+                onClick={() =>
+                  handleSelectPage(Math.max(1, selectedPageNum - 1), true)
+                }
+                className={`min-h-[36px] px-3 py-1 rounded-xl border text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed ${themeStyles.footerMedallion}`}
               >
-                — {toArabicNumerals(pageHeaderInfo.pageNum)} —
-              </span>
+                <span aria-hidden="true">→</span>
+                <span>السابقة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowHud((prev) => !prev)}
+                className={`text-xs sm:text-sm font-bold ${themeStyles.footerSub} hover:underline cursor-pointer whitespace-nowrap px-2 py-1`}
+                data-testid="mushaf-footer-page-num"
+                title="اضغط لإظهار شريط أدوات المصحف والفهرس"
+              >
+                — صفحة {toArabicNumerals(pageHeaderInfo.pageNum)} من ٦٠٤ —
+              </button>
+
+              <button
+                type="button"
+                data-testid="mushaf-next-page-btn"
+                disabled={selectedPageNum >= 604}
+                onClick={() =>
+                  handleSelectPage(Math.min(604, selectedPageNum + 1), true)
+                }
+                className={`min-h-[36px] px-3 py-1 rounded-xl border text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed ${themeStyles.footerMedallion}`}
+              >
+                <span>التالية</span>
+                <span aria-hidden="true">←</span>
+              </button>
             </div>
           </div>
         </div>

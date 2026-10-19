@@ -765,12 +765,12 @@ export function resolveMushafSwipePage(
   currentPage: number,
   deltaX: number,
   deltaY: number,
-  minSwipeDistance: number = 40
+  minSwipeDistance: number = 22
 ): number {
   const clampedCurrent = Math.max(1, Math.min(604, currentPage));
   if (
     Math.abs(deltaX) < minSwipeDistance ||
-    Math.abs(deltaX) < Math.abs(deltaY) * 1.15
+    Math.abs(deltaX) < Math.abs(deltaY) * 0.8
   ) {
     return clampedCurrent;
   }
