@@ -15,12 +15,11 @@ import {
   KAABA_COORDS,
 } from '../utils/astronomy';
 import {
-  findNearbyMosquesForLocation,
-  NearbyMosque,
   calculateTawafOrSaiLapInfo,
   calculateInheritance,
   InheritanceInput,
 } from '../utils/islamicFeatures';
+import { NearbyMosquesMap } from './NearbyMosquesMap';
 import { MANASIK_CHECKLIST_ITEMS } from '../data/thematicAndNamesData';
 import { toArabicNumerals } from '../data/quranData';
 import {
@@ -236,14 +235,6 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
       setIsLocatingQibla(false);
     }
   };
-
-  const nearbyMosques: NearbyMosque[] = useMemo(() => {
-    return findNearbyMosquesForLocation(
-      selectedCity.latitude,
-      selectedCity.longitude,
-      selectedCity.id
-    );
-  }, [selectedCity]);
 
   const currentLapInfo = useMemo(() => {
     return calculateTawafOrSaiLapInfo(ritualType, currentLap);
@@ -618,27 +609,6 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
                   onChange={(e) => setCompassHeading(Number(e.target.value))}
                   className="w-full accent-[#14532D] cursor-pointer h-1.5"
                 />
-                <div className="flex items-center justify-between gap-1 pt-0.5">
-                  {[
-                    { label: 'شمال 0°', deg: 0 },
-                    { label: 'شرق 90°', deg: 90 },
-                    { label: 'جنوب 180°', deg: 180 },
-                    { label: 'غرب 270°', deg: 270 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.deg}
-                      type="button"
-                      onClick={() => setCompassHeading(preset.deg)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                        compassHeading === preset.deg
-                          ? 'bg-stone-800 text-white'
-                          : 'bg-stone-200/70 text-stone-700 hover:bg-stone-300/70'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
@@ -673,60 +643,12 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
             </div>
           </section>
 
-          {/* Nearby Mosques List (7 cols) */}
-          <section
-            aria-labelledby="nearby-mosques-heading"
-            className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 flex flex-col justify-start space-y-3"
-          >
-            <div className="border-b border-stone-100 pb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2
-                id="nearby-mosques-heading"
-                className="font-display text-base sm:text-lg font-bold text-stone-900"
-              >
-                المساجد والجوامع القريبة — {selectedCity.nameAr}
-              </h2>
-              <span className="text-xs text-[#14532D] font-semibold">
-                أقرب جامع: {nearbyMosques[0]?.nameAr}
-              </span>
-            </div>
-
-            {/* Nearby Mosques List */}
-            <div className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto pr-1">
-              {nearbyMosques.map((mosque) => {
-                const distDisplay =
-                  mosque.distanceMeters < 1000
-                    ? `${toArabicNumerals(mosque.distanceMeters)} متر`
-                    : `${(mosque.distanceMeters / 1000).toFixed(1)} كم`;
-                return (
-                  <div
-                    key={mosque.id}
-                    className="py-3 first:pt-1 last:pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                  >
-                    <div className="space-y-0.5">
-                      <h3 className="text-sm font-bold text-stone-900">
-                        {mosque.nameAr}
-                      </h3>
-                      <p className="text-xs text-stone-600">
-                        {mosque.districtAr} · {mosque.featuresAr}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs font-semibold shrink-0">
-                      <span className="font-tabular tabular-nums text-stone-800">
-                        {distDisplay}
-                      </span>
-                      <span aria-hidden="true" className="text-stone-400">
-                        ·
-                      </span>
-                      <span className="text-[#14532D] whitespace-nowrap">
-                        مشياً {toArabicNumerals(mosque.walkingMinutes)} د
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          {/* Interactive Nearby Mosques Map & Turn-by-Turn Navigation (7 cols) */}
+          <NearbyMosquesMap
+            selectedCity={selectedCity}
+            onDetectLocation={handleDetectLocationForQibla}
+            isLocating={isLocatingQibla}
+          />
         </div>
       )}
 

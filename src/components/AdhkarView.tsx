@@ -358,11 +358,15 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
         </div>
       </div>
 
-      {/* Compact Fajr Alarm Bar */}
+      {/* Compact Fajr Alarm Bar (Hidden on mobile when focused on Masbaha) */}
       <section
         aria-label="منبّه الفجر"
         data-testid="smart-fajr-alarm-card"
-        className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3"
+        className={`${
+          mobileFocusMode === 'masbaha' && !isFajrAlarmRinging
+            ? 'hidden lg:block'
+            : 'block'
+        } bg-white border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -515,7 +519,9 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
         {/* Left/Main 8 Cols: Active Category Adhkar List */}
         <div
           className={`${
-            mobileFocusMode === 'masbaha' ? 'order-2 lg:order-1' : 'order-1'
+            mobileFocusMode === 'masbaha'
+              ? 'hidden lg:block lg:order-1'
+              : 'block order-1'
           } lg:col-span-8 space-y-3.5`}
         >
           {/* Compact Single-Row Category Progress Bar */}
@@ -652,7 +658,9 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
         <aside
           aria-label="المسبحة الإلكترونية"
           className={`${
-            mobileFocusMode === 'masbaha' ? 'order-1 lg:order-2' : 'order-2'
+            mobileFocusMode === 'masbaha'
+              ? 'block order-1 lg:order-2'
+              : 'hidden lg:block order-2'
           } lg:col-span-4 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4 lg:sticky lg:top-20`}
         >
           {/* Top Header & Tactile Controls */}

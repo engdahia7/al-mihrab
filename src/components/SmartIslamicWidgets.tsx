@@ -82,7 +82,7 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
   initialCard,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | WidgetCardId>(
-    initialCard || 'all'
+    initialCard || 'next_prayer_arc'
   );
 
   const [sizePreset] = useState<WidgetSizePreset>(() => {
@@ -1246,7 +1246,7 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
             ))}
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions (Consolidated to eliminate duplicate toolbar buttons) */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
@@ -1260,36 +1260,6 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
             >
               <Smartphone className="w-3.5 h-3.5 shrink-0" />
               <span>تفعيل على شاشة الهاتف</span>
-            </button>
-
-            <button
-              type="button"
-              data-testid="launch-pip-widget-btn"
-              onClick={handleToggleExternalPiPWidget}
-              title="إخراج الويدجت في نافذة عائمة فوق الشاشة الرئيسية وتطبيقات الهاتف"
-              className={`min-h-[32px] px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 border transition-colors cursor-pointer whitespace-nowrap ${
-                isPiPActive
-                  ? 'bg-[#78350F] text-white border-[#78350F]'
-                  : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:bg-stone-100'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-[#78350F]" />
-              <span className="hidden sm:inline">نافذة فوق الهاتف</span>
-            </button>
-
-            <button
-              type="button"
-              data-testid="toggle-floating-widget-btn"
-              onClick={() => setFloatingPinned((prev) => !prev)}
-              title="تثبيت ويدجت عائمة"
-              className={`min-h-[32px] px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 border transition-colors cursor-pointer ${
-                floatingPinned
-                  ? 'bg-[#14532D] text-white border-[#14532D]'
-                  : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:bg-stone-100'
-              }`}
-            >
-              <Pin className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">عائمة</span>
             </button>
 
             <button

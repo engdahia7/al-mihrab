@@ -72,7 +72,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
 }) => {
   const [now, setNow] = useState<Date>(() => new Date());
   const [activeSubScreen, setActiveSubScreen] =
-    useState<PrayersSubScreen>('widgets');
+    useState<PrayersSubScreen>('alerts');
   const [showAdvancedSettings, setShowAdvancedSettings] =
     useState<boolean>(false);
   const [showMonthlyTable, setShowMonthlyTable] = useState<boolean>(false);
@@ -544,27 +544,12 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         </div>
       </section>
 
-      {/* 3. Concise 3-Tab Sub-Screen Switcher */}
+      {/* 3. Concise 3-Tab Sub-Screen Switcher (No duplicate prayer clocks on default view) */}
       <div
         role="tablist"
-        aria-label="أقسام المواقيت والويدجت والتنبيهات"
+        aria-label="أقسام التنبيهات والإمساكية والويدجت"
         className="grid grid-cols-3 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
       >
-        <button
-          type="button"
-          role="tab"
-          data-testid="subtab-widgets"
-          aria-selected={activeSubScreen === 'widgets'}
-          onClick={() => setActiveSubScreen('widgets')}
-          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
-            activeSubScreen === 'widgets'
-              ? 'bg-[#14532D] text-white shadow-xs'
-              : 'text-stone-700 hover:bg-stone-200/70'
-          }`}
-        >
-          <span>الويدجت (٦)</span>
-        </button>
-
         <button
           type="button"
           role="tab"
@@ -593,6 +578,21 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           }`}
         >
           <span>الإمساكية والمسافر</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          data-testid="subtab-widgets"
+          aria-selected={activeSubScreen === 'widgets'}
+          onClick={() => setActiveSubScreen('widgets')}
+          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
+            activeSubScreen === 'widgets'
+              ? 'bg-[#14532D] text-white shadow-xs'
+              : 'text-stone-700 hover:bg-stone-200/70'
+          }`}
+        >
+          <span>ويدجت الهاتف</span>
         </button>
       </div>
 

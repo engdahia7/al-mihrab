@@ -7,7 +7,8 @@ import {
   calculateGroupKhatmahSummary,
   distributeJuzAmongMembers,
   calculateSmartFajrAlarmTime,
-  findNearbyMosquesForLocation,
+  buildMosqueNavigationUrls,
+  sortAndEnrichMosquePlaces,
   MASBAHA_PHRASES,
   calculateMasbahaState,
   getPostPrayerTasbihStage,
@@ -136,12 +137,47 @@ test('Smart Fajr Alarm: calculates pre-Fajr Qiyam alarm time accurately', () => 
   assert.equal(exact.alarmTimeHHMM, '04:45');
 });
 
-test('Nearby Mosques Finder: returns sorted mosques with walking time and Qibla bearing', () => {
+test('Nearby Mosques Map & Navigation: maps Places API results, sorts by distance, and builds navigation URLs', () => {
   const makkah = VERIFIED_CITIES.find((c) => c.id === 'makkah')!;
-  const mosques = findNearbyMosquesForLocation(makkah.latitude, makkah.longitude, 'makkah');
-  assert.ok(mosques.length >= 3);
-  assert.ok(mosques[0].nameAr.includes('المسجد الحرام'));
-  assert.ok(mosques[0].walkingMinutes >= 1);
+  const places = [
+    {
+      id: 'ChIJ_far',
+      displayName: 'مسجد بعيد',
+      formattedAddress: 'مكة',
+      location: { lat: makkah.latitude + 0.02, lng: makkah.longitude + 0.02 },
+      rating: 4.8,
+      userRatingCount: 320,
+    },
+    {
+      id: 'ChIJ_near',
+      displayName: 'مسجد قريب',
+      formattedAddress: 'مكة',
+      location: { lat: () => makkah.latitude + 0.002, lng: () => makkah.longitude + 0.002 },
+      rating: 4.9,
+      userRatingCount: 510,
+    },
+  ];
+
+  const sorted = sortAndEnrichMosquePlaces(places, makkah.latitude, makkah.longitude);
+  assert.equal(sorted.length, 2);
+  assert.equal(sorted[0].id, 'ChIJ_near');
+  assert.ok(sorted[0].distanceMeters < sorted[1].distanceMeters);
+  assert.ok(sorted[0].walkingMinutes >= 1);
+
+  const navUrls = buildMosqueNavigationUrls(
+    { lat: makkah.latitude, lng: makkah.longitude },
+    {
+      lat: sorted[0].latitude,
+      lng: sorted[0].longitude,
+      placeId: sorted[0].id,
+    },
+    'walking'
+  );
+  assert.ok(navUrls.googleMapsDirUrl.includes('https://www.google.com/maps/dir/?api=1'));
+  assert.ok(navUrls.googleMapsDirUrl.includes('destination_place_id=ChIJ_near'));
+  assert.ok(navUrls.googleMapsDirUrl.includes('travelmode=walking'));
+  assert.ok(navUrls.appleMapsDirUrl.includes('dirflg=w'));
+  assert.ok(navUrls.wazeNavUrl.includes('navigate=yes'));
 });
 
 test('Masbahah 33-Bead Engine: tracks lit beads, 33-cycle milestones, and guided post-prayer stages', () => {

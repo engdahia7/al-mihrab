@@ -6,6 +6,8 @@ import {
   Heart,
   Compass,
   MapPin,
+  Share2,
+  Check,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -180,6 +182,42 @@ export default function App() {
     searchParams && searchParams.get('widget') === '1'
   );
   const [standaloneNow, setStandaloneNow] = useState<Date>(() => new Date());
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState<boolean>(false);
+  const [copiedWaqfShare, setCopiedWaqfShare] = useState<boolean>(false);
+
+  const handleShareWaqfApp = async () => {
+    const shareUrl = window.location.origin + window.location.pathname;
+    const shareTitle = 'المحراب — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته';
+    const shareText =
+      'تطبيق «المحراب» — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته | نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله. هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم:';
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // Fallback to clipboard copy if user cancels or share fails
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+      setCopiedWaqfShare(true);
+      window.setTimeout(() => setCopiedWaqfShare(false), 3000);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    const handleQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+  }, []);
 
   useEffect(() => {
     if (!isStandaloneWidget) return;
@@ -237,19 +275,49 @@ export default function App() {
       className="min-h-screen flex flex-col bg-[#FBF9F5] text-[#1C1917] overflow-x-hidden"
       dir="rtl"
     >
+      {gmpQuotaExceeded && (
+        <div
+          className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm"
+          dir="ltr"
+        >
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
+
       {/* Top Bar: 3-Zone Desktop Contract + Compact Mobile App Header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 md:gap-8 px-3.5 sm:px-8 h-14 sm:h-16">
-          {/* Zone 1: Single text element wordmark */}
+          {/* Zone 1: Brand Wordmark + Combined Slogan */}
           <a
             href="#top"
             onClick={(e) => {
               e.preventDefault();
               handleSelectTab('prayers');
             }}
-            className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap shrink-0"
+            className="flex flex-col justify-center shrink-0 group"
           >
-            المحراب
+            <div className="flex items-center gap-2">
+              <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap group-hover:text-[#14532D] transition-colors">
+                المحراب
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
+                في محراب الطاعة · لوجه الله
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-xs text-stone-600 font-medium leading-tight mt-0.5 whitespace-nowrap">
+              نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله.. لا تنسونا من صالح دعائكم
+            </span>
           </a>
 
           {/* Mobile Left Slot: Active City & Offline Storage / PWA Install */}
@@ -361,34 +429,72 @@ export default function App() {
         )}
       </main>
 
-      {/* Quiet Editorial Footer (Desktop & Tablet) */}
-      <footer className="hidden md:block border-t border-stone-200 bg-[#F7F4EE] mt-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-600">
-          <div>
-            <span className="font-display font-bold text-stone-900">المحراب</span>
-            <span aria-hidden="true"> · </span>
-            <span>
-              مصحف المدينة النبوية (مجمع الملك فهد) · أذكار حصن المسلم والأدعية المأثورة · الحسابات الفلكية والمواريث الشرعية
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSelectTab(item.id)}
-                className="hover:text-stone-900 cursor-pointer whitespace-nowrap"
-              >
-                {item.labelDesktop}
-              </button>
-            ))}
-            <span aria-hidden="true" className="text-stone-300">|</span>
-            <a
-              href="./privacy-policy.html"
-              className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap"
+      {/* Waqf & Sadaqah Jariyah Dedication Footer (Visible on Mobile & Desktop) */}
+      <footer className="border-t border-stone-200 bg-[#F7F4EE] mt-6 pb-20 md:pb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-4">
+          {/* Combined Slogan Card */}
+          <div className="rounded-2xl bg-[#FBF9F5] border border-[#14532D]/20 px-4 py-4 sm:px-6 sm:py-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#14532D] text-white">
+                  ما كان لله دام واتصل.. تطبيقٌ خالصٌ لوجه الله
+                </span>
+                <span className="text-xs sm:text-sm font-bold text-[#14532D]">
+                  «في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته»
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-medium">
+                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله — هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleShareWaqfApp}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 transition-colors cursor-pointer shrink-0 w-full md:w-auto"
             >
-              سياسة الخصوصية
-            </a>
+              {copiedWaqfShare ? (
+                <>
+                  <Check className="w-4 h-4 text-[#14532D]" />
+                  <span>تم نسخ رابط الوقف للمشاركة في الأجر</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4 text-[#14532D]" />
+                  <span>شاركه صدقةً جاريةً ليعمّ الأجر</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Editorial Links & Sources Row */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-600 pt-1">
+            <div className="text-center sm:text-right">
+              <span className="font-display font-bold text-stone-900">المحراب</span>
+              <span aria-hidden="true"> · </span>
+              <span>
+                مصحف المدينة النبوية (مجمع الملك فهد) · أذكار حصن المسلم والأدعية المأثورة · الحسابات الفلكية والمواريث الشرعية
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectTab(item.id)}
+                  className="hover:text-stone-900 cursor-pointer whitespace-nowrap"
+                >
+                  {item.labelDesktop}
+                </button>
+              ))}
+              <span aria-hidden="true" className="text-stone-300">|</span>
+              <a
+                href="./privacy-policy.html"
+                className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap"
+              >
+                سياسة الخصوصية
+              </a>
+            </div>
           </div>
         </div>
       </footer>

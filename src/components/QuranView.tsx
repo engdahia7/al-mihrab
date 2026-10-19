@@ -1141,13 +1141,13 @@ export const QuranView: React.FC<QuranViewProps> = ({
          ===================================================================== */}
       {showHud && activeOverlay === 'none' && (
         <div
-          className="fixed top-2.5 inset-x-2.5 sm:top-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-3xl z-50 bg-[#1C1917]/95 backdrop-blur-md text-[#FAF5E8] rounded-2xl px-3 py-2.5 shadow-xl border border-[#B59E7A]/40 space-y-2"
+          className="fixed top-2.5 inset-x-2.5 sm:top-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-2xl z-50 bg-[#1C1917]/95 backdrop-blur-md text-[#FAF5E8] rounded-2xl px-3 py-2.5 shadow-xl border border-[#B59E7A]/40 space-y-2"
           data-testid="mushaf-floating-hud"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
-          {/* Row 1: Primary Navigation & Overlays */}
+          {/* Row 1: Essential Mushaf Actions */}
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             {onExitMushaf && (
               <button
@@ -1191,15 +1191,6 @@ export const QuranView: React.FC<QuranViewProps> = ({
 
             <button
               type="button"
-              data-testid="hud-open-themes-btn"
-              onClick={() => setActiveOverlay('themes')}
-              className="min-h-[34px] px-2.5 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25 text-amber-200 rounded-lg cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              المواضيع
-            </button>
-
-            <button
-              type="button"
               data-testid="hud-open-tafsir-btn"
               onClick={() => {
                 setShareCardDataUrl(null);
@@ -1220,8 +1211,8 @@ export const QuranView: React.FC<QuranViewProps> = ({
             </button>
           </div>
 
-          {/* Row 2: Reading Comfort Themes (Classic / Sepia / Night) + Font Size */}
-          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-white/15">
+          {/* Row 2: Reading Comfort Themes + Font Size + Quick Page Slider */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/15">
             <div
               role="group"
               aria-label="نمط إضاءة وورق المصحف"
@@ -1231,7 +1222,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 type="button"
                 data-testid="theme-classic-btn"
                 onClick={() => setMushafTheme('classic')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
                   mushafTheme === 'classic'
                     ? 'bg-[#FAF5E8] text-stone-900'
                     : 'text-stone-300 hover:text-white'
@@ -1244,7 +1235,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 type="button"
                 data-testid="theme-sepia-btn"
                 onClick={() => setMushafTheme('sepia')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
                   mushafTheme === 'sepia'
                     ? 'bg-[#EEDEC0] text-[#26180A]'
                     : 'text-stone-300 hover:text-white'
@@ -1257,7 +1248,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 type="button"
                 data-testid="theme-night-btn"
                 onClick={() => setMushafTheme('night')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
                   mushafTheme === 'night'
                     ? 'bg-[#14532D] text-white'
                     : 'text-stone-300 hover:text-white'
@@ -1267,69 +1258,38 @@ export const QuranView: React.FC<QuranViewProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-0.5 bg-white/15 rounded-lg px-1.5 py-0.5 shrink-0">
-              <button
-                type="button"
-                aria-label="تصغير خط المصحف"
-                onClick={() => setFontSizeLevel((l) => Math.max(1, l - 1))}
-                className="p-1 text-white/90 hover:text-white cursor-pointer"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] px-0.5 font-medium">خط</span>
-              <button
-                type="button"
-                aria-label="تكبير خط المصحف"
-                onClick={() => setFontSizeLevel((l) => Math.min(4, l + 1))}
-                className="p-1 text-white/90 hover:text-white cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+            <div className="flex items-center gap-2 flex-1 min-w-[150px] justify-end">
+              <input
+                type="range"
+                min={1}
+                max={604}
+                value={selectedPageNum}
+                aria-label="شريط الانتقال بين صفحات المصحف"
+                onChange={(e) => handleSelectPage(Number(e.target.value), false)}
+                className="w-24 sm:w-36 accent-[#14532D] cursor-pointer"
+              />
 
-          {/* Row 3: Quick Page Slider inside HUD */}
-          <div className="flex items-center gap-2 pt-1 border-t border-white/15 text-xs">
-            <span className="text-[#E6D7BC] whitespace-nowrap font-semibold">
-              ص {toArabicNumerals(selectedPageNum)} / ٦٠٤
-            </span>
-            <input
-              type="range"
-              min={1}
-              max={604}
-              value={selectedPageNum}
-              aria-label="شريط الانتقال بين صفحات المصحف"
-              onChange={(e) => handleSelectPage(Number(e.target.value), false)}
-              className="flex-1 accent-[#14532D] cursor-pointer"
-            />
-            <button
-              type="button"
-              onClick={() => setShowHud(false)}
-              className="px-2 py-0.5 text-[11px] text-[#E6D7BC] hover:text-white cursor-pointer whitespace-nowrap"
-            >
-              إخفاء
-            </button>
-          </div>
-
-          {/* Row 4: Saved Reading Stop & One-Click Resume inside HUD */}
-          {savedReadingStop && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/15 text-xs">
-              <div className="flex items-center gap-1.5 text-[#FDE68A] truncate">
-                <Bookmark className="w-3.5 h-3.5 fill-current shrink-0" />
-                <span className="truncate font-semibold">
-                  موضع توقفك المحفوظ: {formatReadingStopLabelAr(savedReadingStop)}
-                </span>
+              <div className="flex items-center gap-0.5 bg-white/15 rounded-lg px-1.5 py-0.5 shrink-0">
+                <button
+                  type="button"
+                  aria-label="تصغير خط المصحف"
+                  onClick={() => setFontSizeLevel((l) => Math.max(1, l - 1))}
+                  className="p-1 text-white/90 hover:text-white cursor-pointer"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] px-0.5 font-medium">خط</span>
+                <button
+                  type="button"
+                  aria-label="تكبير خط المصحف"
+                  onClick={() => setFontSizeLevel((l) => Math.min(4, l + 1))}
+                  className="p-1 text-white/90 hover:text-white cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                data-testid="hud-resume-reading-btn"
-                onClick={() => handleResumeFromSavedStop(savedReadingStop)}
-                className="px-3 py-1 rounded-lg bg-[#FDE68A] text-stone-950 font-bold text-[11px] hover:bg-amber-200 cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                استكمال القراءة الآن
-              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 

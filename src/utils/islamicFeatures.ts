@@ -832,164 +832,20 @@ export interface NearbyMosque {
   longitude: number;
   distanceMeters: number;
   walkingMinutes: number;
+  drivingMinutes: number;
   qiblaBearingDeg: number;
   featuresAr: string;
+  rating?: number | null;
+  userRatingCount?: number | null;
+  googleMapsURI?: string | null;
 }
 
-const VERIFIED_MOSQUES_CATALOG: {
-  cityId: string;
-  nameAr: string;
-  districtAr: string;
-  latitude: number;
-  longitude: number;
-  featuresAr: string;
-}[] = [
-  // مكة المكرمة
-  {
-    cityId: 'makkah',
-    nameAr: 'المسجد الحرام — الكعبة المشرفة',
-    districtAr: 'الحرم المكي الشريف',
-    latitude: 21.4225,
-    longitude: 39.8262,
-    featuresAr: 'قبلة المسلمين · جامع الصلوات الخمس والجمعة · متاح ٢٤ ساعة',
-  },
-  {
-    cityId: 'makkah',
-    nameAr: 'مسجد التنعيم (مسجد السيدة عائشة)',
-    districtAr: 'التنعيم — شمال مكة',
-    latitude: 21.4669,
-    longitude: 39.8005,
-    featuresAr: 'ميقات الإحرام لأهل مكة · مواقف ومرافق وضوء متكاملة',
-  },
-  {
-    cityId: 'makkah',
-    nameAr: 'مسجد نمرة بعرفات',
-    districtAr: 'مشعر عرفات',
-    latitude: 21.3528,
-    longitude: 39.9669,
-    featuresAr: 'مسجد خطبة يوم عرفة وجمع الظهر والعصر',
-  },
-  {
-    cityId: 'makkah',
-    nameAr: 'جامع الراجحي بمكة المكرمة',
-    districtAr: 'حي النسيم — مكة المكرمة',
-    latitude: 21.3782,
-    longitude: 39.8764,
-    featuresAr: 'حلقات تحفيظ قرآن · مصلى نساء · مكتبة علمية',
-  },
-  // المدينة المنورة
-  {
-    cityId: 'madinah',
-    nameAr: 'المسجد النبوي الشريف والروضة الشريفة',
-    districtAr: 'المنطقة المركزية — المدينة المنورة',
-    latitude: 24.4672,
-    longitude: 39.6112,
-    featuresAr: 'صلاة فيه خير من ألف صلاة · الروضة الشريفة',
-  },
-  {
-    cityId: 'madinah',
-    nameAr: 'مسجد قباء (أول مسجد أُسس على التقوى)',
-    districtAr: 'قباء — جنوب المدينة المنورة',
-    latitude: 24.4393,
-    longitude: 39.6172,
-    featuresAr: 'الصلاة فيه تعدل أجر عمرة · متاح ٢٤ ساعة',
-  },
-  {
-    cityId: 'madinah',
-    nameAr: 'مسجد القبلتين',
-    districtAr: 'حرة الوبرة — شمال غرب المدينة',
-    latitude: 24.4841,
-    longitude: 39.5787,
-    featuresAr: 'المعلم التاريخي لتحويل القبلة إلى الكعبة المشرفة',
-  },
-  // القدس الشريف
-  {
-    cityId: 'jerusalem',
-    nameAr: 'المسجد الأقصى المبارك',
-    districtAr: 'البلدة القديمة — القدس الشريف',
-    latitude: 31.7761,
-    longitude: 35.2358,
-    featuresAr: 'أولى القبلتين وثالث الحرمين الشريفين',
-  },
-  // القاهرة
-  {
-    cityId: 'cairo',
-    nameAr: 'الجامع الأزهر الشريف',
-    districtAr: 'الدراسة — القاهرة الفاطمية',
-    latitude: 30.0457,
-    longitude: 31.2627,
-    featuresAr: 'الأروقة العلمية وحلقات القرآن والحديث · جامع تاريخي',
-  },
-  {
-    cityId: 'cairo',
-    nameAr: 'مسجد عمرو بن العاص (تاج الجوامع)',
-    districtAr: 'الفسطاط — مصر القديمة',
-    latitude: 30.0101,
-    longitude: 31.2331,
-    featuresAr: 'أول مسجد بُني في مصر وإفريقيا · ساحات واسعة ومصلى نساء',
-  },
-  {
-    cityId: 'cairo',
-    nameAr: 'مسجد السلطان حسن',
-    districtAr: 'ميدان القلعة — القاهرة',
-    latitude: 30.0317,
-    longitude: 31.2569,
-    featuresAr: 'درة العمارة الإسلامية المملوكية · الصلوات الخمس والجمعة',
-  },
-  // الرياض
-  {
-    cityId: 'riyadh',
-    nameAr: 'جامع الإمام تركي بن عبد الله (الجامع الكبير)',
-    districtAr: 'منطقة قصر الحكم — الديرة',
-    latitude: 24.6308,
-    longitude: 46.7119,
-    featuresAr: 'الجامع المركزي بالرياض · دروس علمية ومكتبة',
-  },
-  {
-    cityId: 'riyadh',
-    nameAr: 'جامع الملك خالد بأم الحمام',
-    districtAr: 'حي أم الحمام — الرياض',
-    latitude: 24.6915,
-    longitude: 46.6525,
-    featuresAr: 'تلاوات خاشعة · حلقات تحفيظ · مصلى نساء واسع',
-  },
-  // دبي
-  {
-    cityId: 'dubai',
-    nameAr: 'مسجد جميرا الكبير',
-    districtAr: 'جميرا ١ — دبي',
-    latitude: 25.2339,
-    longitude: 55.2654,
-    featuresAr: 'عمارة فاطمية أصيلة · مرافق متكاملة للصلوات الخمس',
-  },
-  // الدوحة
-  {
-    cityId: 'doha',
-    nameAr: 'جامع الإمام محمد بن عبد الوهاب',
-    districtAr: 'الجبيلات — الدوحة',
-    latitude: 25.3133,
-    longitude: 51.5153,
-    featuresAr: 'جامع الدولة الكبير بقطر · يتسع لأكثر من ٣٠ ألف مصلٍّ',
-  },
-  // عمّان
-  {
-    cityId: 'amman',
-    nameAr: 'مسجد الملك المؤسس عبد الله الأول',
-    districtAr: 'العبدلي — عمّان',
-    latitude: 31.9614,
-    longitude: 35.9128,
-    featuresAr: 'القبة الزرقاء الشهيرة · مصلى نساء ومواقف',
-  },
-  // الكويت
-  {
-    cityId: 'kuwait',
-    nameAr: 'المسجد الكبير بدولة الكويت',
-    districtAr: 'قبلة — مدينة الكويت',
-    latitude: 29.3792,
-    longitude: 47.9748,
-    featuresAr: 'أكبر جامع في الكويت · مصليات واسعة ومكتبة إسلامية',
-  },
-];
+export interface MosqueNavigationUrls {
+  googleMapsDirUrl: string;
+  googleMapsPlaceUrl: string;
+  appleMapsDirUrl: string;
+  wazeNavUrl: string;
+}
 
 export function calculateMetersBetweenCoords(
   lat1: number,
@@ -1010,79 +866,124 @@ export function calculateMetersBetweenCoords(
   return Math.round(R * c);
 }
 
-export function findNearbyMosquesForLocation(
-  lat: number,
-  lng: number,
-  cityId?: string
+export function buildMosqueNavigationUrls(
+  origin: { lat: number; lng: number },
+  destination: {
+    lat: number;
+    lng: number;
+    placeId?: string | null;
+    googleMapsURI?: string | null;
+  },
+  travelMode: 'walking' | 'driving' = 'walking'
+): MosqueNavigationUrls {
+  const originParam = `${origin.lat},${origin.lng}`;
+  const destParam = `${destination.lat},${destination.lng}`;
+  const placeIdParam =
+    destination.placeId && !destination.placeId.startsWith('mosque-')
+      ? `&destination_place_id=${encodeURIComponent(destination.placeId)}`
+      : '';
+
+  const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destParam}${placeIdParam}&travelmode=${travelMode}`;
+
+  const googleMapsPlaceUrl =
+    destination.googleMapsURI ||
+    `https://www.google.com/maps/search/?api=1&query=${destParam}${
+      destination.placeId && !destination.placeId.startsWith('mosque-')
+        ? `&query_place_id=${encodeURIComponent(destination.placeId)}`
+        : ''
+    }`;
+
+  const appleDirFlag = travelMode === 'walking' ? 'w' : 'd';
+  const appleMapsDirUrl = `https://maps.apple.com/?saddr=${originParam}&daddr=${destParam}&dirflg=${appleDirFlag}`;
+
+  const wazeNavUrl = `https://waze.com/ul?ll=${destParam}&navigate=yes`;
+
+  return {
+    googleMapsDirUrl,
+    googleMapsPlaceUrl,
+    appleMapsDirUrl,
+    wazeNavUrl,
+  };
+}
+
+export interface RawGooglePlaceLike {
+  id?: string | null;
+  displayName?: string | null;
+  formattedAddress?: string | null;
+  location?:
+    | {
+        lat: number | (() => number);
+        lng: number | (() => number);
+      }
+    | null;
+  rating?: number | null;
+  userRatingCount?: number | null;
+  googleMapsURI?: string | null;
+}
+
+export function mapPlaceResultToMosque(
+  place: RawGooglePlaceLike,
+  userLat: number,
+  userLng: number,
+  fallbackIndex = 0
+): NearbyMosque | null {
+  if (!place || !place.location) return null;
+
+  const rawLat = place.location.lat;
+  const rawLng = place.location.lng;
+  const latitude = typeof rawLat === 'function' ? rawLat() : Number(rawLat);
+  const longitude = typeof rawLng === 'function' ? rawLng() : Number(rawLng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  const distanceMeters = calculateMetersBetweenCoords(
+    userLat,
+    userLng,
+    latitude,
+    longitude
+  );
+  const walkingMinutes = Math.max(1, Math.round(distanceMeters / 75)); // ~4.5 km/h walking
+  const drivingMinutes = Math.max(1, Math.round(distanceMeters / 500)); // ~30 km/h urban driving
+  const qiblaBearingDeg = calculateQiblaDirection(latitude, longitude);
+
+  const ratingText =
+    typeof place.rating === 'number'
+      ? `تقييم ${place.rating.toFixed(1)}${
+          place.userRatingCount ? ` (${place.userRatingCount})` : ''
+        }`
+      : 'مسجد / جامع';
+
+  return {
+    id: place.id || `mosque-${fallbackIndex}`,
+    nameAr: place.displayName || 'مسجد',
+    districtAr: place.formattedAddress || '',
+    latitude,
+    longitude,
+    distanceMeters,
+    walkingMinutes,
+    drivingMinutes,
+    qiblaBearingDeg,
+    featuresAr: ratingText,
+    rating: place.rating ?? null,
+    userRatingCount: place.userRatingCount ?? null,
+    googleMapsURI: place.googleMapsURI ?? null,
+  };
+}
+
+export function sortAndEnrichMosquePlaces(
+  places: RawGooglePlaceLike[],
+  userLat: number,
+  userLng: number
 ): NearbyMosque[] {
-  const computed = VERIFIED_MOSQUES_CATALOG.map((m, idx) => {
-    const distanceMeters = calculateMetersBetweenCoords(lat, lng, m.latitude, m.longitude);
-    const walkingMinutes = Math.max(1, Math.round(distanceMeters / 75)); // ~4.5 km/h walking
-    const qiblaBearingDeg = calculateQiblaDirection(m.latitude, m.longitude);
-    return {
-      id: `mosque-${idx}`,
-      nameAr: m.nameAr,
-      districtAr: m.districtAr,
-      latitude: m.latitude,
-      longitude: m.longitude,
-      distanceMeters,
-      walkingMinutes,
-      qiblaBearingDeg,
-      featuresAr: m.featuresAr,
-      isSameCity: cityId ? m.cityId === cityId : false,
-    };
+  const mapped: NearbyMosque[] = [];
+  places.forEach((p, idx) => {
+    const item = mapPlaceResultToMosque(p, userLat, userLng, idx);
+    if (item) mapped.push(item);
   });
-
-  // Sort by closest distance
-  computed.sort((a, b) => a.distanceMeters - b.distanceMeters);
-
-  const withinCityRadius = computed.filter((m) => m.distanceMeters <= 30000);
-
-  const localMosques: NearbyMosque[] = [
-    {
-      id: 'local-1',
-      nameAr: 'جامع الحي المركزي الكبير',
-      districtAr: 'النطاق العمراني القريب — ٣٥٠ متر',
-      latitude: Number((lat + 0.0028).toFixed(5)),
-      longitude: Number((lng + 0.0019).toFixed(5)),
-      distanceMeters: 350,
-      walkingMinutes: 5,
-      qiblaBearingDeg: calculateQiblaDirection(lat + 0.0028, lng + 0.0019),
-      featuresAr: 'الصلوات الخمس وصلاة الجمعة · مصلى نساء · مواقف',
-    },
-    {
-      id: 'local-2',
-      nameAr: 'مسجد التقوى والهدى',
-      districtAr: 'النطاق العمراني القريب — ٦٨٠ متر',
-      latitude: Number((lat - 0.0045).toFixed(5)),
-      longitude: Number((lng + 0.0038).toFixed(5)),
-      distanceMeters: 680,
-      walkingMinutes: 9,
-      qiblaBearingDeg: calculateQiblaDirection(lat - 0.0045, lng + 0.0038),
-      featuresAr: 'حلقات قرآن يومية بعد العصر والمغرب · مرافق وضوء',
-    },
-    {
-      id: 'local-3',
-      nameAr: 'جامع النور والإيمان',
-      districtAr: 'النطاق العمراني — ١.٢ كم',
-      latitude: Number((lat + 0.0085).toFixed(5)),
-      longitude: Number((lng - 0.0062).toFixed(5)),
-      distanceMeters: 1200,
-      walkingMinutes: 16,
-      qiblaBearingDeg: calculateQiblaDirection(lat + 0.0085, lng - 0.0062),
-      featuresAr: 'جامع الجمعة والأعياد · مكتبة إسلامية',
-    },
-  ];
-
-  if (withinCityRadius.length === 0) {
-    return localMosques;
-  }
-
-  if (withinCityRadius.length < 4) {
-    return [...withinCityRadius, ...localMosques].slice(0, 5);
-  }
-
-  return withinCityRadius.slice(0, 6);
+  mapped.sort((a, b) => a.distanceMeters - b.distanceMeters);
+  return mapped;
 }
 
 // ============================================================================
