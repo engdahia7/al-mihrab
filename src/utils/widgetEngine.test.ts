@@ -4,6 +4,9 @@ import {
   calculatePrayerIntervalProgress,
   getWidgetDailyAyah,
   buildWidgetEmbedSnippet,
+  buildStandalonePhoneWidgetUrl,
+  buildLockScreenNotificationPayload,
+  generateIOSScriptableWidgetScript,
   getUpcomingHijriNoteAr,
   WIDGET_THEMES,
   WIDGET_CATALOG,
@@ -63,3 +66,44 @@ test('buildWidgetEmbedSnippet generates valid iframe with query parameters and t
   assert.ok(snippet.includes('theme=emerald'));
   assert.ok(snippet.includes('type=qibla_hijri'));
 });
+
+test('external mobile phone widget helpers generate valid standalone URL, lockscreen payload, and iOS Scriptable code', () => {
+  const standaloneUrl = buildStandalonePhoneWidgetUrl(
+    'https://almihrab.example.com/',
+    'makkah',
+    'kiswah',
+    'daily_schedule'
+  );
+  assert.equal(
+    standaloneUrl,
+    'https://almihrab.example.com/?widget=1&city=makkah&theme=kiswah&card=daily_schedule'
+  );
+
+  const notif = buildLockScreenNotificationPayload({
+    cityNameAr: 'مكة المكرمة',
+    nextPrayerNameAr: 'العصر',
+    nextPrayerTime: '15:35',
+    remainingFormatted: '00:45:10',
+    times: SAMPLE_TIMES,
+    hijriFormattedAr: '١٤ رمضان ١٤٤٨ هـ',
+  });
+  assert.ok(notif.title.includes('صلاة العصر'));
+  assert.ok(notif.body.includes('مكة المكرمة'));
+  assert.ok(notif.body.includes('الفجر 05:00'));
+
+  const script = generateIOSScriptableWidgetScript({
+    cityNameAr: 'مكة المكرمة',
+    cityId: 'makkah',
+    times: SAMPLE_TIMES,
+    hijriFormattedAr: '١٤ رمضان ١٤٤٨ هـ',
+    qiblaAngle: 0,
+    dailyAyahText: 'أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ',
+    dailyAyahSurahAr: 'سورة الرعد',
+    themeId: 'emerald',
+    appUrl: 'https://almihrab.example.com/',
+  });
+  assert.ok(script.includes('new ListWidget()'));
+  assert.ok(script.includes('مكة المكرمة'));
+  assert.ok(script.includes('05:00'));
+});
+

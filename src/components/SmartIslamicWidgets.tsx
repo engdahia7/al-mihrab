@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Clock,
@@ -9,6 +9,12 @@ import {
   Pin,
   X,
   RotateCcw,
+  Smartphone,
+  Copy,
+  Check,
+  Bell,
+  ExternalLink,
+  Layers,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -29,6 +35,9 @@ import {
   calculatePrayerIntervalProgress,
   getWidgetDailyAyah,
   getUpcomingHijriNoteAr,
+  buildStandalonePhoneWidgetUrl,
+  buildLockScreenNotificationPayload,
+  generateIOSScriptableWidgetScript,
 } from '../utils/widgetEngine';
 
 const WIDGET_PREFS_KEY = 'almihrab_smart_widget_prefs_v1';
@@ -54,6 +63,7 @@ interface SmartIslamicWidgetsProps {
   standaloneMode?: boolean;
   initialSize?: WidgetSizePreset;
   initialTheme?: WidgetThemeId;
+  initialCard?: WidgetCardId | 'all';
 }
 
 export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
@@ -69,8 +79,11 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
   standaloneMode = false,
   initialSize,
   initialTheme,
+  initialCard,
 }) => {
-  const [activeFilter, setActiveFilter] = useState<'all' | WidgetCardId>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | WidgetCardId>(
+    initialCard || 'all'
+  );
 
   const [sizePreset] = useState<WidgetSizePreset>(() => {
     if (initialSize) return initialSize;
@@ -122,6 +135,17 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
   const [dhikrIndex, setDhikrIndex] = useState<number>(0);
   const [ayahOffset, setAyahOffset] = useState<number>(0);
   const [standbyFullscreen, setStandbyFullscreen] = useState<boolean>(false);
+
+  // External Mobile Phone Widget Hub state
+  const [showPhoneWidgetModal, setShowPhoneWidgetModal] = useState<boolean>(false);
+  const [selectedExternalCard, setSelectedExternalCard] =
+    useState<WidgetCardId>('next_prayer_arc');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [externalStatusMsg, setExternalStatusMsg] = useState<string | null>(null);
+  const [isPiPActive, setIsPiPActive] = useState<boolean>(false);
+
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (standaloneMode) return;
@@ -277,6 +301,379 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
     link.href = dataUrl;
     link.download = `mihrab-widget-${selectedCity.id}.png`;
     link.click();
+  };
+
+  // Draw live frame onto the hidden PiP Canvas whenever `now` or theme updates
+  const drawLivePiPCanvasFrame = () => {
+    const canvas = pipCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, theme.canvasBgStart);
+    grad.addColorStop(1, theme.canvasBgEnd);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = theme.canvasAccent;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.4;
+    ctx.strokeRect(12, 12, w - 24, h - 24);
+    ctx.globalAlpha = 1;
+
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = theme.canvasAccent;
+    ctx.font = 'bold 20px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(`المحراب · ${selectedCity.nameAr}`, w - 26, 44);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = theme.canvasTextSecondary;
+    ctx.font = '15px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(
+      `${toArabicNumerals(hijriDate.day)} ${hijriDate.monthNameAr} ${toArabicNumerals(
+        hijriDate.year
+      )} هـ`,
+      26,
+      44
+    );
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = theme.canvasTextSecondary;
+    ctx.font = 'bold 19px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(
+      `الصلاة القادمة: صلاة ${nextPrayerInfo.nextPrayerNameAr} (${nextPrayerInfo.nextPrayerTime})`,
+      w / 2,
+      98
+    );
+
+    ctx.fillStyle = theme.canvasTextPrimary;
+    ctx.font = 'bold 50px monospace';
+    ctx.fillText(`-${nextPrayerInfo.remainingFormatted}`, w / 2, 158);
+
+    const fivePrayers: { key: keyof DailyPrayerTimes; label: string }[] = [
+      { key: 'fajr', label: 'الفجر' },
+      { key: 'dhuhr', label: 'الظهر' },
+      { key: 'asr', label: 'العصر' },
+      { key: 'maghrib', label: 'المغرب' },
+      { key: 'isha', label: 'العشاء' },
+    ];
+    const slotW = 94;
+    const startRight = w - 24;
+    fivePrayers.forEach((p, idx) => {
+      const rightX = startRight - idx * 102;
+      const leftX = rightX - slotW;
+      const isNext = nextPrayerInfo.nextPrayerKey === p.key;
+      ctx.fillStyle = isNext
+        ? 'rgba(253, 230, 138, 0.24)'
+        : 'rgba(255, 255, 255, 0.08)';
+      ctx.fillRect(leftX, 196, slotW, 74);
+      if (isNext) {
+        ctx.strokeStyle = theme.canvasAccent;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(leftX, 196, slotW, 74);
+      }
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isNext ? theme.canvasAccent : theme.canvasTextSecondary;
+      ctx.font = 'bold 14px "IBM Plex Sans Arabic", sans-serif';
+      ctx.fillText(p.label, leftX + slotW / 2, 224);
+
+      ctx.fillStyle = theme.canvasTextPrimary;
+      ctx.font = 'bold 17px monospace';
+      ctx.fillText(todayTimes[p.key], leftX + slotW / 2, 252);
+    });
+  };
+
+  useEffect(() => {
+    drawLivePiPCanvasFrame();
+  }, [now, themeId, selectedCity, todayTimes, nextPrayerInfo]);
+
+  // Launch Native OS Picture-in-Picture Floating Window (Stays outside browser over phone Home Screen!)
+  const handleToggleExternalPiPWidget = async () => {
+    try {
+      if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiPActive(false);
+        return;
+      }
+
+      drawLivePiPCanvasFrame();
+      const canvas = pipCanvasRef.current;
+      const video = pipVideoRef.current;
+      if (!canvas || !video) return;
+
+      const anyCanvas = canvas as HTMLCanvasElement & {
+        captureStream?: (fps?: number) => MediaStream;
+      };
+      if (typeof anyCanvas.captureStream === 'function') {
+        if (!video.srcObject) {
+          video.srcObject = anyCanvas.captureStream(1);
+        }
+        await video.play();
+      }
+
+      const anyVideo = video as HTMLVideoElement & {
+        webkitSetPresentationMode?: (mode: string) => void;
+      };
+      if (typeof video.requestPictureInPicture === 'function') {
+        await video.requestPictureInPicture();
+        setIsPiPActive(true);
+        setExternalStatusMsg(
+          'تم تشغيل الويدجت العائمة فوق شاشة الهاتف! يمكنك الآن الخروج للشاشة الرئيسية أو فتح أي تطبيق آخر وستبقى الويدجت ظاهرة.'
+        );
+      } else if (typeof anyVideo.webkitSetPresentationMode === 'function') {
+        anyVideo.webkitSetPresentationMode('picture-in-picture');
+        setIsPiPActive(true);
+        setExternalStatusMsg(
+          'تم تشغيل الويدجت العائمة على آيفون! اخرج الآن للشاشة الرئيسية وستبقى الويدجت ظاهرة أمامك.'
+        );
+      } else {
+        setFloatingPinned(true);
+        setExternalStatusMsg(
+          'تم تثبيت الويدجت العائمة؛ ولإظهارها على شاشة الهاتف الرئيسية استخدم خيار «ويدجت الآيفون Scriptable» أو «رابط الويدجت المستقل» أدناه.'
+        );
+      }
+    } catch {
+      setFloatingPinned(true);
+      setExternalStatusMsg(
+        'تم تفعيل الويدجت العائمة؛ يمكنك أيضاً تثبيت إشعار شاشة القفل أو إضافة ويدجت الشاشة الرئيسية من الخيارات أدناه.'
+      );
+    }
+  };
+
+  // Pin Persistent Live Prayer Schedule to Phone Lock Screen & Notification Shade
+  const handlePinToPhoneLockScreenNotification = async () => {
+    const payload = buildLockScreenNotificationPayload({
+      cityNameAr: selectedCity.nameAr,
+      nextPrayerNameAr: nextPrayerInfo.nextPrayerNameAr,
+      nextPrayerTime: nextPrayerInfo.nextPrayerTime,
+      remainingFormatted: nextPrayerInfo.remainingFormatted,
+      times: todayTimes,
+      hijriFormattedAr: `${toArabicNumerals(hijriDate.day)} ${hijriDate.monthNameAr} ${toArabicNumerals(
+        hijriDate.year
+      )} هـ`,
+    });
+
+    // Also set MediaSession metadata so Lock Screen displays the prayer card artwork
+    try {
+      drawLivePiPCanvasFrame();
+      const artworkUrl = pipCanvasRef.current?.toDataURL('image/png');
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && window.MediaMetadata) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: payload.title,
+          artist: `المحراب · ${selectedCity.nameAr}`,
+          album: payload.body,
+          artwork: artworkUrl
+            ? [{ src: artworkUrl, sizes: '560x310', type: 'image/png' }]
+            : [{ src: './pwa-512x512.png', sizes: '512x512', type: 'image/png' }],
+        });
+      }
+    } catch {
+      // ignore mediaSession errors
+    }
+
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setExternalStatusMsg(
+        'تم تحديث بيانات شاشة القفل (MediaSession). على آيفون، تأكد من فتح التطبيق من أيقونة الشاشة الرئيسية لتفعيل إشعارات شاشة القفل.'
+      );
+      return;
+    }
+
+    try {
+      let perm = Notification.permission;
+      if (perm === 'default') {
+        perm = await Notification.requestPermission();
+      }
+      if (perm !== 'granted') {
+        setExternalStatusMsg(
+          'يرجى السماح بالإشعارات في متصفح/إعدادات الهاتف ليظهر جدول مواقيت الصلاة في شاشة القفل وستارة الإشعارات.'
+        );
+        return;
+      }
+
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(payload.title, {
+          body: payload.body,
+          tag: payload.tag,
+          icon: './pwa-192x192.png',
+          badge: './pwa-192x192.png',
+          silent: true,
+        });
+      } else {
+        new Notification(payload.title, {
+          body: payload.body,
+          tag: payload.tag,
+          icon: './pwa-192x192.png',
+        });
+      }
+      setExternalStatusMsg(
+        'تم تثبيت ويدجت مواقيت الصلاة في شاشة القفل وستارة إشعارات الهاتف بنجاح!'
+      );
+    } catch {
+      setExternalStatusMsg(
+        'تم تفعيل بطاقة شاشة القفل؛ يمكنك أيضاً استخدام ويدجت الشاشة الرئيسية للآيفون أو الأندرويد أدناه.'
+      );
+    }
+  };
+
+  // Generate 1080x2340 Phone Lock-Screen Wallpaper with top clock safe-zone
+  const handleDownloadLockScreenWallpaper = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 2340;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, 1080, 2340);
+    grad.addColorStop(0, theme.canvasBgStart);
+    grad.addColorStop(1, theme.canvasBgEnd);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1080, 2340);
+
+    // Subtle geometric arch ornament
+    ctx.strokeStyle = theme.canvasAccent;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.22;
+    ctx.strokeRect(54, 54, 972, 2232);
+    ctx.beginPath();
+    ctx.arc(540, 920, 380, Math.PI, 0, false);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Bottom Widget Card Area (Leaves top 1..850px clear for iPhone/Android Lock Screen Clock!)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.fillRect(84, 980, 912, 1140);
+    ctx.strokeStyle = theme.canvasAccent;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(84, 980, 912, 1140);
+
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = theme.canvasAccent;
+    ctx.font = 'bold 44px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(`المحراب · مواقيت صلاة ${selectedCity.nameAr}`, 540, 1075);
+
+    ctx.fillStyle = theme.canvasTextSecondary;
+    ctx.font = '32px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(
+      `${toArabicNumerals(hijriDate.day)} ${hijriDate.monthNameAr} ${toArabicNumerals(
+        hijriDate.year
+      )} هـ  ·  اتجاه القبلة ${toArabicNumerals(Math.round(qiblaAngle))}°`,
+      540,
+      1140
+    );
+
+    const prayers = PRAYER_METADATA.map((meta) => ({
+      name: meta.nameAr,
+      time: todayTimes[meta.key],
+      isNext: nextPrayerInfo.nextPrayerKey === meta.key,
+    }));
+
+    prayers.forEach((p, idx) => {
+      const y = 1215 + idx * 102;
+      ctx.fillStyle = p.isNext
+        ? 'rgba(253, 230, 138, 0.24)'
+        : 'rgba(255, 255, 255, 0.07)';
+      ctx.fillRect(130, y, 820, 84);
+      if (p.isNext) {
+        ctx.strokeStyle = theme.canvasAccent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(130, y, 820, 84);
+      }
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = p.isNext ? theme.canvasAccent : theme.canvasTextPrimary;
+      ctx.font = 'bold 34px "IBM Plex Sans Arabic", sans-serif';
+      ctx.fillText(`صلاة ${p.name}`, 910, y + 54);
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 38px monospace';
+      ctx.fillText(p.time, 170, y + 55);
+    });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = theme.canvasAccent;
+    ctx.font = 'bold 34px "Amiri", serif';
+    ctx.fillText(`﴿ ${dailyAyah.ayahText} ﴾`, 540, 1935);
+
+    ctx.fillStyle = theme.canvasTextSecondary;
+    ctx.font = '26px "IBM Plex Sans Arabic", sans-serif';
+    ctx.fillText(
+      `${dailyAyah.surahNameAr} · آية ${toArabicNumerals(dailyAyah.ayahNumber)}`,
+      540,
+      1995
+    );
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `mihrab-lockscreen-${selectedCity.id}.png`;
+    link.click();
+  };
+
+  const baseAppUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}`
+      : 'https://al-mihrab.example.com/';
+
+  const standaloneWidgetUrl = useMemo(() => {
+    return buildStandalonePhoneWidgetUrl(
+      baseAppUrl,
+      selectedCity.id,
+      themeId,
+      selectedExternalCard
+    );
+  }, [baseAppUrl, selectedCity.id, themeId, selectedExternalCard]);
+
+  const iosScriptableCode = useMemo(() => {
+    return generateIOSScriptableWidgetScript({
+      cityNameAr: selectedCity.nameAr,
+      cityId: selectedCity.id,
+      times: todayTimes,
+      hijriFormattedAr: `${toArabicNumerals(hijriDate.day)} ${
+        hijriDate.monthNameAr
+      } ${toArabicNumerals(hijriDate.year)} هـ`,
+      qiblaAngle,
+      dailyAyahText: dailyAyah.ayahText,
+      dailyAyahSurahAr: dailyAyah.surahNameAr,
+      themeId,
+      appUrl: baseAppUrl,
+    });
+  }, [
+    selectedCity,
+    todayTimes,
+    hijriDate,
+    qiblaAngle,
+    dailyAyah,
+    themeId,
+    baseAppUrl,
+  ]);
+
+  const handleCopyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleDownloadIOSScript = () => {
+    const blob = new Blob([iosScriptableCode], {
+      type: 'application/javascript;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `AlMihrab-Widget-${selectedCity.id}.js`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // ============================================================================
@@ -741,9 +1138,49 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
 
   if (standaloneMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-transparent" dir="rtl">
-        <div className="w-full max-w-xl" data-testid="live-widget-card">
-          {renderNextPrayerArcWidget()}
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 ${theme.bgClass}`}
+        dir="rtl"
+      >
+        <div className="w-full max-w-xl space-y-3" data-testid="live-widget-card">
+          {activeFilter === 'all' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {renderNextPrayerArcWidget()}
+              {renderDailyScheduleWidget()}
+              {renderQuranWirdWidget()}
+              {renderTasbihDhikrWidget()}
+              {renderQiblaHijriWidget()}
+              {renderLockscreenCompactWidget()}
+            </div>
+          ) : (
+            renderCardById(activeFilter)
+          )}
+
+          {/* Compact switcher bar at the bottom of Standalone Mobile Home Screen Widget */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-black/25 backdrop-blur-md text-white text-xs border border-white/15">
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {WIDGET_CATALOG.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveFilter(item.id)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer whitespace-nowrap ${
+                    activeFilter === item.id
+                      ? 'bg-[#FDE68A] text-stone-950 font-bold'
+                      : 'text-white/80 hover:text-white'
+                  }`}
+                >
+                  {item.shortTitleAr}
+                </button>
+              ))}
+            </div>
+            <a
+              href="./"
+              className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold whitespace-nowrap"
+            >
+              فتح المحراب ←
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -810,7 +1247,36 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="open-phone-widget-hub-btn"
+              onClick={() => {
+                setExternalStatusMsg(null);
+                setShowPhoneWidgetModal(true);
+              }}
+              title="استخدام وتثبيت الويدجت خارج التطبيق على شاشة الهاتف (آيفون وأندرويد)"
+              className="min-h-[32px] px-3 py-1 rounded-xl text-xs font-bold bg-[#14532D] hover:bg-[#14532D]/90 text-[#FDE68A] border border-[#14532D] flex items-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+            >
+              <Smartphone className="w-3.5 h-3.5 shrink-0" />
+              <span>تفعيل على شاشة الهاتف</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="launch-pip-widget-btn"
+              onClick={handleToggleExternalPiPWidget}
+              title="إخراج الويدجت في نافذة عائمة فوق الشاشة الرئيسية وتطبيقات الهاتف"
+              className={`min-h-[32px] px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 border transition-colors cursor-pointer whitespace-nowrap ${
+                isPiPActive
+                  ? 'bg-[#78350F] text-white border-[#78350F]'
+                  : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:bg-stone-100'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-[#78350F]" />
+              <span className="hidden sm:inline">نافذة فوق الهاتف</span>
+            </button>
+
             <button
               type="button"
               data-testid="toggle-floating-widget-btn"
@@ -849,6 +1315,16 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Hidden Canvas & Video Stream for Native OS Picture-in-Picture Floating Phone Widget */}
+      <div className="sr-only pointer-events-none" aria-hidden="true">
+        <canvas ref={pipCanvasRef} width={560} height={310} />
+        <video
+          ref={pipVideoRef}
+          playsInline
+          muted
+        />
       </div>
 
       {/* Direct 6-Widget Bento Grid (No Nested Wrapper Boxes) */}
@@ -952,6 +1428,272 @@ export const SmartIslamicWidgets: React.FC<SmartIslamicWidgetsProps> = ({
                 {renderTasbihDhikrWidget()}
                 {renderQiblaHijriWidget()}
                 {renderLockscreenCompactWidget()}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* =====================================================================
+          PORTALED MODAL: استخدام الويدجت خارج التطبيق على الهاتف (iOS & Android)
+         ===================================================================== */}
+      {showPhoneWidgetModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="تفعيل الويدجت خارج التطبيق على الهاتف"
+            dir="rtl"
+            data-testid="phone-external-widget-modal"
+            className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+            onClick={() => setShowPhoneWidgetModal(false)}
+          >
+            <div
+              className="w-full max-w-3xl max-h-[90dvh] flex flex-col bg-[#FBF9F5] border-2 border-[#B59E7A] rounded-2xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-4 sm:px-6 py-4 bg-[#14532D] text-white flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Smartphone className="w-5 h-5 text-[#FDE68A] shrink-0" />
+                  <div>
+                    <h2 className="font-display text-base sm:text-xl font-bold">
+                      تشغيل وتثبيت الويدجت خارج التطبيق على الهاتف
+                    </h2>
+                    <p className="text-[11px] text-stone-200">
+                      ٤ طرق عملية لإظهار الويدجت على شاشة الهاتف الرئيسية، شاشة القفل، وفوق التطبيقات (آيفون وأندرويد)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPhoneWidgetModal(false)}
+                  aria-label="إغلاق"
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+                {externalStatusMsg && (
+                  <div
+                    role="status"
+                    data-testid="external-widget-status-banner"
+                    className="p-3 rounded-xl bg-[#14532D]/10 border border-[#14532D]/30 text-xs font-bold text-[#14532D] flex items-center justify-between gap-2"
+                  >
+                    <span>{externalStatusMsg}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExternalStatusMsg(null)}
+                      className="text-stone-500 hover:text-stone-800 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* METHOD 1 & 2: Instant OS Floating Window (PiP) & Lock-Screen Notification Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Method 1: Picture-in-Picture Floating Window over Phone Home Screen */}
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-col justify-between space-y-3">
+                    <div className="space-y-1">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-[#78350F] text-[11px] font-bold">
+                        ١. فوري بدون برامج إضافية
+                      </span>
+                      <h3 className="font-display text-base font-bold text-stone-900">
+                        نافذة عائمة حية فوق شاشة الهاتف (PiP)
+                      </h3>
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        يُخرج بطاقة العد التنازلي للصلاة ومواقيت اليوم في نافذة عائمة أصلية من النظام تبقى ظاهرة على الشاشة الرئيسية للهاتف وفوق جميع التطبيقات الأخرى.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="modal-launch-pip-btn"
+                      onClick={handleToggleExternalPiPWidget}
+                      className="w-full min-h-[40px] px-4 py-2 rounded-xl bg-[#78350F] hover:bg-[#92400E] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Layers className="w-4 h-4" />
+                      <span>
+                        {isPiPActive
+                          ? 'إيقاف النافذة العائمة فوق الهاتف'
+                          : 'تشغيل الويدجت العائمة فوق شاشة الهاتف الآن'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Method 2: Persistent Lock-Screen & Notification Shade Banner */}
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-col justify-between space-y-3">
+                    <div className="space-y-1">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-[#14532D] text-[11px] font-bold">
+                        ٢. شاشة القفل وستارة الإشعارات
+                      </span>
+                      <h3 className="font-display text-base font-bold text-stone-900">
+                        تثبيت المواقيت في شاشة القفل وستارة الهاتف
+                      </h3>
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        يُثبّت إشعاراً صامتاً في شاشة قفل الهاتف وستارة الإشعارات العلوية يعرض الصلاة القادمة ومواقيت الصلوات الخمس لمدينتك ({selectedCity.nameAr}).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="modal-pin-lockscreen-notification-btn"
+                      onClick={handlePinToPhoneLockScreenNotification}
+                      className="w-full min-h-[40px] px-4 py-2 rounded-xl bg-[#14532D] hover:bg-[#166534] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Bell className="w-4 h-4" />
+                      <span>تثبيت في شاشة القفل وستارة الإشعارات</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* METHOD 3: iPhone / iPad Real Home Screen & Lock Screen Widget (iOS Scriptable) */}
+                <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 text-[11px] font-bold mb-1">
+                        ٣. ويدجت الشاشة الرئيسية للآيفون والآيباد (iOS Home &amp; Lock Screen)
+                      </span>
+                      <h3 className="font-display text-base font-bold text-stone-900">
+                        كود ويدجت آيفون الجاهز لمدينة {selectedCity.nameAr} (يعمل بدون إنترنت)
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        data-testid="copy-ios-scriptable-btn"
+                        onClick={() =>
+                          handleCopyText('ios_script', iosScriptableCode)
+                        }
+                        className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#14532D] hover:bg-[#166534] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedKey === 'ios_script' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>تم نسخ كود الآيفون</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>نسخ كود ويدجت الآيفون</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="download-ios-scriptable-btn"
+                        onClick={handleDownloadIOSScript}
+                        className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#F4EFE6] hover:bg-stone-200 text-stone-900 border border-stone-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#78350F]" />
+                        <span>تحميل ملف .js</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <ol className="text-xs text-stone-700 space-y-1 list-decimal list-inside bg-[#FBF9F5] border border-stone-200/80 rounded-xl p-3">
+                    <li>
+                      حمّل تطبيق <strong>Scriptable</strong> المجاني من متجر آبل (App Store)، ثم افتحه واضغط علامة <strong>(+)</strong> في الأعلى.
+                    </li>
+                    <li>
+                      اضغط زر <strong>«نسخ كود ويدجت الآيفون»</strong> أعلاه والصقه داخل التطبيق ثم اضغط <strong>Done</strong>.
+                    </li>
+                    <li>
+                      اخرج إلى شاشة الآيفون الرئيسية، اضغط مطولاً على الشاشة ← <strong>(+)</strong> ← اختر ويدجت <strong>Scriptable</strong> وحدد السكربت لتظهر مواقيت {selectedCity.nameAr} والعد التنازلي وآية اليوم على شاشة هاتفك دائماً!
+                    </li>
+                  </ol>
+                </div>
+
+                {/* METHOD 4: Android Home Screen Web-Widget URL + Standalone Shortcut + Lock Screen Wallpaper */}
+                <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 text-[11px] font-bold mb-1">
+                      ٤. ويدجت الشاشة الرئيسية للأندرويد + اختصار الويدجت المستقل
+                    </span>
+                    <h3 className="font-display text-base font-bold text-stone-900">
+                      رابط الويدجت المستقل لتطبيقات شاشة أندرويد (Web Widget / Widgetify / KWGT)
+                    </h3>
+                    <p className="text-xs text-stone-600 mt-0.5">
+                      اختر نوع الويدجت الذي تريده على شاشة هاتفك، ثم انسخ رابطه لوضعه في تطبيق <strong>Web Widget</strong> على أندرويد، أو افتحه مباشرةً وأضفه للشاشة الرئيسية:
+                    </p>
+                  </div>
+
+                  {/* Select which of the 6 cards to generate standalone URL for */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {WIDGET_CATALOG.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedExternalCard(item.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition-colors ${
+                          selectedExternalCard === item.id
+                            ? 'bg-[#14532D] text-white border-[#14532D]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:bg-stone-100'
+                        }`}
+                      >
+                        {item.titleAr}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      dir="ltr"
+                      value={standaloneWidgetUrl}
+                      aria-label="رابط الويدجت المستقل للهاتف"
+                      className="flex-1 min-w-[200px] px-3 py-2 rounded-xl bg-[#FBF9F5] border border-stone-300 text-xs font-mono text-stone-800"
+                    />
+                    <button
+                      type="button"
+                      data-testid="copy-standalone-widget-url-btn"
+                      onClick={() =>
+                        handleCopyText('standalone_url', standaloneWidgetUrl)
+                      }
+                      className="min-h-[38px] px-3.5 py-2 rounded-xl bg-[#14532D] hover:bg-[#166534] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedKey === 'standalone_url' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>تم نسخ الرابط</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>نسخ رابط الويدجت</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={standaloneWidgetUrl}
+                      data-testid="open-standalone-widget-link"
+                      className="min-h-[38px] px-3.5 py-2 rounded-xl bg-[#F4EFE6] hover:bg-stone-200 text-stone-900 border border-stone-300 text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-[#78350F]" />
+                      <span>فتح كوويدجت مستقل</span>
+                    </a>
+                  </div>
+
+                  {/* Lock Screen Wallpaper Generator Button */}
+                  <div className="pt-2 border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-stone-600">
+                      أو حمّل <strong>خلفية شاشة قفل الهاتف الطولية (1080×2340)</strong> بمواقيت صلاة {selectedCity.nameAr} وآية اليوم:
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="download-lockscreen-wallpaper-btn"
+                      onClick={handleDownloadLockScreenWallpaper}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#92400E] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>تحميل خلفية شاشة القفل بمواقيت اليوم</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>,

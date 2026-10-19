@@ -375,3 +375,192 @@ export function buildWidgetEmbedSnippet(
 
   return `<iframe src="${embedUrl}" width="${dimensions.width}" height="${dimensions.height}" style="border:0;border-radius:20px;overflow:hidden;" title="ويدجت المحراب لمواقيت الصلاة والقرآن" loading="lazy"></iframe>`;
 }
+
+/**
+ * Builds a direct standalone URL for mobile Home Screen Web-Widget apps (Android Widgetify/Web Widget)
+ * or standalone PWA Home Screen shortcuts.
+ */
+export function buildStandalonePhoneWidgetUrl(
+  baseUrl: string,
+  cityId: string,
+  themeId: WidgetThemeId,
+  cardId: WidgetCardId | 'all' = 'next_prayer_arc'
+): string {
+  const cleanBase = baseUrl.replace(/\/$/, '');
+  return `${cleanBase}/?widget=1&city=${encodeURIComponent(
+    cityId
+  )}&theme=${encodeURIComponent(themeId)}&card=${encodeURIComponent(cardId)}`;
+}
+
+export interface LockScreenNotificationPayload {
+  title: string;
+  body: string;
+  tag: string;
+}
+
+/**
+ * Formats a concise, high-clarity Arabic notification payload for the phone's Lock Screen
+ * and Notification Shade showing the upcoming prayer and all 5 daily prayer times.
+ */
+export function buildLockScreenNotificationPayload(params: {
+  cityNameAr: string;
+  nextPrayerNameAr: string;
+  nextPrayerTime: string;
+  remainingFormatted: string;
+  times: AstronomicalPrayerTimes;
+  hijriFormattedAr: string;
+}): LockScreenNotificationPayload {
+  const {
+    cityNameAr,
+    nextPrayerNameAr,
+    nextPrayerTime,
+    remainingFormatted,
+    times,
+    hijriFormattedAr,
+  } = params;
+
+  const title = `صلاة ${nextPrayerNameAr} (${nextPrayerTime}) · متبقٍ -${remainingFormatted}`;
+  const body =
+    `📍 ${cityNameAr} (${hijriFormattedAr})\n` +
+    `الفجر ${times.fajr} | الظهر ${times.dhuhr} | العصر ${times.asr} | المغرب ${times.maghrib} | العشاء ${times.isha}`;
+
+  return {
+    title,
+    body,
+    tag: 'almihrab-live-prayer-widget',
+  };
+}
+
+/**
+ * Generates a complete, self-contained iOS Scriptable widget script (.js)
+ * that runs natively on iPhone/iPad Home Screen & Lock Screen (even 100% offline!).
+ */
+export function generateIOSScriptableWidgetScript(params: {
+  cityNameAr: string;
+  cityId: string;
+  times: AstronomicalPrayerTimes;
+  hijriFormattedAr: string;
+  qiblaAngle: number;
+  dailyAyahText: string;
+  dailyAyahSurahAr: string;
+  themeId: WidgetThemeId;
+  appUrl: string;
+}): string {
+  const theme = WIDGET_THEMES[params.themeId] || WIDGET_THEMES.emerald;
+  const cleanAppUrl = params.appUrl || 'https://al-mihrab.example.com/';
+
+  return `// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: deep-green; icon-glyph: moon;
+/**
+ * ويدجت تطبيق «المحراب» للشاشة الرئيسية وشاشة القفل في آيفون (iOS Scriptable Widget)
+ * المدينة: ${params.cityNameAr} | الثيم: ${theme.nameAr}
+ * يعمل مباشرة على شاشة الهاتف الرئيسية وشاشة القفل بدون إنترنت.
+ */
+
+const CITY_NAME = ${JSON.stringify(params.cityNameAr)};
+const HIJRI_DATE = ${JSON.stringify(params.hijriFormattedAr)};
+const QIBLA_DEG = ${Math.round(params.qiblaAngle)};
+const APP_URL = ${JSON.stringify(cleanAppUrl)};
+const DAILY_AYAH = ${JSON.stringify(params.dailyAyahText)};
+const DAILY_SURAH = ${JSON.stringify(params.dailyAyahSurahAr)};
+
+const PRAYERS = [
+  { name: "الفجر", time: ${JSON.stringify(params.times.fajr)} },
+  { name: "الشروق", time: ${JSON.stringify(params.times.sunrise)} },
+  { name: "الظهر", time: ${JSON.stringify(params.times.dhuhr)} },
+  { name: "العصر", time: ${JSON.stringify(params.times.asr)} },
+  { name: "المغرب", time: ${JSON.stringify(params.times.maghrib)} },
+  { name: "العشاء", time: ${JSON.stringify(params.times.isha)} }
+];
+
+function getNextPrayer(now) {
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  for (const p of PRAYERS) {
+    const [h, m] = p.time.split(":").map(Number);
+    const pMins = h * 60 + m;
+    if (pMins > nowMins) {
+      const diff = pMins - nowMins;
+      const rh = Math.floor(diff / 60);
+      const rm = diff % 60;
+      return { ...p, remaining: \`\${String(rh).padStart(2, "0")}:\${String(rm).padStart(2, "0")}\` };
+    }
+  }
+  const [fh, fm] = PRAYERS[0].time.split(":").map(Number);
+  const diff = (24 * 60 - nowMins) + (fh * 60 + fm);
+  const rh = Math.floor(diff / 60);
+  const rm = diff % 60;
+  return { ...PRAYERS[0], remaining: \`\${String(rh).padStart(2, "0")}:\${String(rm).padStart(2, "0")}\` };
+}
+
+const now = new Date();
+const nextP = getNextPrayer(now);
+
+const widget = new ListWidget();
+widget.url = APP_URL;
+widget.setPadding(14, 16, 14, 16);
+
+const gradient = new LinearGradient();
+gradient.locations = [0, 1];
+gradient.colors = [new Color(${JSON.stringify(theme.canvasBgStart)}), new Color(${JSON.stringify(theme.canvasBgEnd)})];
+widget.backgroundGradient = gradient;
+
+// Header Row
+const headerStack = widget.addStack();
+headerStack.layoutHorizontally();
+const titleTxt = headerStack.addText("المحراب · " + CITY_NAME);
+titleTxt.font = Font.boldSystemFont(12);
+titleTxt.textColor = new Color(${JSON.stringify(theme.canvasAccent)});
+headerStack.addSpacer();
+const hijriTxt = headerStack.addText(HIJRI_DATE);
+hijriTxt.font = Font.systemFont(10);
+hijriTxt.textColor = new Color(${JSON.stringify(theme.canvasTextSecondary)});
+
+widget.addSpacer(6);
+
+// Next Prayer Highlight
+const nextStack = widget.addStack();
+nextStack.layoutHorizontally();
+nextStack.centerAlignContent();
+const nextLabel = nextStack.addText("صلاة " + nextP.name + " (" + nextP.time + ")");
+nextLabel.font = Font.boldSystemFont(16);
+nextLabel.textColor = new Color(${JSON.stringify(theme.canvasTextPrimary)});
+nextStack.addSpacer();
+const remLabel = nextStack.addText("متبقٍ -" + nextP.remaining);
+remLabel.font = Font.boldMonospacedSystemFont(14);
+remLabel.textColor = new Color(${JSON.stringify(theme.canvasAccent)});
+
+widget.addSpacer(8);
+
+// 5 Prayers Row (for Medium/Large widgets)
+if (config.widgetFamily !== "small") {
+  const row = widget.addStack();
+  row.layoutHorizontally();
+  for (const p of PRAYERS.filter(x => x.name !== "الشروق")) {
+    const col = row.addStack();
+    col.layoutVertically();
+    col.centerAlignContent();
+    const nTxt = col.addText(p.name);
+    nTxt.font = Font.systemFont(10);
+    nTxt.textColor = p.name === nextP.name ? new Color(${JSON.stringify(theme.canvasAccent)}) : new Color(${JSON.stringify(theme.canvasTextSecondary)});
+    const tTxt = col.addText(p.time);
+    tTxt.font = Font.boldMonospacedSystemFont(11);
+    tTxt.textColor = new Color(${JSON.stringify(theme.canvasTextPrimary)});
+    row.addSpacer();
+  }
+  widget.addSpacer(6);
+  const ayahTxt = widget.addText("﴿ " + DAILY_AYAH + " ﴾");
+  ayahTxt.font = Font.systemFont(11);
+  ayahTxt.textColor = new Color(${JSON.stringify(theme.canvasAccent)});
+  ayahTxt.lineLimit = 1;
+}
+
+if (config.runsInWidget) {
+  Script.setWidget(widget);
+} else {
+  await widget.presentMedium();
+}
+Script.complete();
+`;
+}
+

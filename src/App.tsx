@@ -25,7 +25,11 @@ import { QiblaAndSourcesView } from './components/QiblaAndSourcesView';
 import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
-import { WidgetSizePreset, WidgetThemeId } from './utils/widgetEngine';
+import {
+  WidgetSizePreset,
+  WidgetThemeId,
+  WidgetCardId,
+} from './utils/widgetEngine';
 import { detectUserLocation } from './utils/geolocationService';
 
 export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
@@ -167,20 +171,37 @@ export default function App() {
 
   const todayHijri = gregorianToHijri(new Date(), hijriAdjustment);
 
-  // Check if URL requests standalone embeddable widget mode (?widget=1)
+  // Check if URL requests standalone embeddable / mobile Home Screen widget mode (?widget=1)
   const searchParams =
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search)
       : null;
-  if (searchParams && searchParams.get('widget') === '1') {
+  const isStandaloneWidget = Boolean(
+    searchParams && searchParams.get('widget') === '1'
+  );
+  const [standaloneNow, setStandaloneNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    if (!isStandaloneWidget) return;
+    const timer = window.setInterval(() => {
+      setStandaloneNow(new Date());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isStandaloneWidget]);
+
+  if (isStandaloneWidget && searchParams) {
     const queryCityId = searchParams.get('city');
     const queryCity =
       VERIFIED_CITIES.find((c) => c.id === queryCityId) || selectedCity;
     const queryTheme = (searchParams.get('theme') as WidgetThemeId) || 'emerald';
     const querySize = (searchParams.get('size') as WidgetSizePreset) || 'medium';
-    const now = new Date();
+    const queryCard =
+      (searchParams.get('card') as WidgetCardId | 'all') ||
+      (searchParams.get('type') as WidgetCardId) ||
+      'next_prayer_arc';
+
     const times = calculateAstronomicalPrayerTimes(
-      now,
+      standaloneNow,
       queryCity.latitude,
       queryCity.longitude,
       queryCity.timezoneOffsetHours,
@@ -189,9 +210,9 @@ export default function App() {
     );
     const nextInfo = getNextPrayerInfo(
       times,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds()
+      standaloneNow.getHours(),
+      standaloneNow.getMinutes(),
+      standaloneNow.getSeconds()
     );
     const qibla = calculateQiblaDirection(queryCity.latitude, queryCity.longitude);
 
@@ -202,10 +223,11 @@ export default function App() {
         nextPrayerInfo={nextInfo}
         hijriDate={todayHijri}
         qiblaAngle={qibla}
-        now={now}
+        now={standaloneNow}
         standaloneMode={true}
         initialSize={querySize}
         initialTheme={queryTheme}
+        initialCard={queryCard}
       />
     );
   }
