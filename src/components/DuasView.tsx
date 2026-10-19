@@ -4,6 +4,8 @@ import {
   Bookmark,
   Copy,
   Check,
+  Image as ImageIcon,
+  Heart,
 } from 'lucide-react';
 import {
   DUA_TOPIC_CATEGORIES,
@@ -21,14 +23,21 @@ import {
 } from '../data/thematicAndNamesData';
 import { toArabicNumerals } from '../data/quranData';
 import { sanitizeQuranicText } from '../utils/astronomy';
+import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const FAVORITE_DUAS_STORAGE_KEY = 'almihrab_favorite_duas_v1';
 
 interface DuasViewProps {
   onOpenMushafPage?: (pageNum: number) => void;
+  onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
+  onOpenWaqfModal?: () => void;
 }
 
-export const DuasView: React.FC<DuasViewProps> = ({ onOpenMushafPage }) => {
+export const DuasView: React.FC<DuasViewProps> = ({
+  onOpenMushafPage,
+  onOpenDawahCard,
+  onOpenWaqfModal,
+}) => {
   // Primary Section Switcher: Authentic Duas | Asma Allah Al-Husna | Thematic Quran Index
   const [activeSection, setActiveSection] = useState<
     'duas' | 'asma_husna' | 'thematic_quran'
@@ -163,9 +172,22 @@ export const DuasView: React.FC<DuasViewProps> = ({ onOpenMushafPage }) => {
     <div className="space-y-4 sm:space-y-5">
       {/* Header & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
-          الأدعية والأسماء الحسنى
-        </h1>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
+            الأدعية والأسماء الحسنى
+          </h1>
+          {onOpenWaqfModal && (
+            <button
+              type="button"
+              data-testid="duas-open-waqf-btn"
+              onClick={onOpenWaqfModal}
+              className="min-h-[34px] px-3 py-1 rounded-xl bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Heart className="w-3.5 h-3.5" />
+              <span>وقف وإهداء للوالدين أو متوفى</span>
+            </button>
+          )}
+        </div>
 
         <div className="relative w-full sm:w-72">
           <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -334,7 +356,29 @@ export const DuasView: React.FC<DuasViewProps> = ({ onOpenMushafPage }) => {
                           </h2>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          {onOpenDawahCard && (
+                            <button
+                              type="button"
+                              data-testid={`dua-share-card-btn-${dua.id}`}
+                              onClick={() =>
+                                onOpenDawahCard({
+                                  category: 'dua',
+                                  headerBadgeAr: `${dua.originType} · ${dua.occasionAr}`,
+                                  titleAr: dua.titleAr,
+                                  mainArabicText: cleanArabicText,
+                                  explanationOrVirtueAr: dua.meaningExplanationAr,
+                                  sourceAndGradingAr: `${dua.sourceAr} (${dua.gradingAr})`,
+                                })
+                              }
+                              aria-label={`بطاقة دعوية لـ ${dua.titleAr}`}
+                              className="min-h-[32px] px-2.5 py-1 rounded-lg border border-[#14532D]/20 bg-[#14532D]/8 text-[#14532D] hover:bg-[#14532D]/15 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>بطاقة دعوية</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => handleToggleFavorite(dua.id)}
@@ -456,23 +500,45 @@ export const DuasView: React.FC<DuasViewProps> = ({ onOpenMushafPage }) => {
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleCopyAsma(item)}
-                        className="min-h-[32px] px-2.5 py-1 rounded-lg border border-stone-200 bg-[#FBF9F5] text-xs text-stone-700 hover:text-stone-900 flex items-center gap-1 cursor-pointer shrink-0"
-                      >
-                        {isCopied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-[#14532D]" />
-                            <span>نُسخ</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>نسخ</span>
-                          </>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {onOpenDawahCard && (
+                          <button
+                            type="button"
+                            data-testid={`asma-share-card-btn-${item.number}`}
+                            onClick={() =>
+                              onOpenDawahCard({
+                                category: 'asma',
+                                headerBadgeAr: `موسوعة أسماء الله الحسنى · ${item.category}`,
+                                titleAr: `اسم الله «${item.nameAr}» (${item.evidenceAr})`,
+                                mainArabicText: item.duaWithNameAr,
+                                explanationOrVirtueAr: `${item.meaningAr} — ${item.worshipImpactAr}`,
+                                sourceAndGradingAr: 'وَلِلَّهِ الْأَسْمَاءُ الْحُسْنَىٰ فَادْعُوهُ بِهَا',
+                              })
+                            }
+                            className="min-h-[32px] px-2.5 py-1 rounded-lg border border-[#14532D]/20 bg-[#14532D]/8 text-xs font-semibold text-[#14532D] hover:bg-[#14532D]/15 flex items-center gap-1 cursor-pointer shrink-0"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            <span>بطاقة دعوية</span>
+                          </button>
                         )}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyAsma(item)}
+                          className="min-h-[32px] px-2.5 py-1 rounded-lg border border-stone-200 bg-[#FBF9F5] text-xs text-stone-700 hover:text-stone-900 flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          {isCopied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-[#14532D]" />
+                              <span>نُسخ</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>نسخ</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <p className="text-xs sm:text-sm text-stone-700 leading-relaxed pt-2 border-t border-stone-100">
@@ -541,15 +607,37 @@ export const DuasView: React.FC<DuasViewProps> = ({ onOpenMushafPage }) => {
                       </h2>
                     </div>
 
-                    {onOpenMushafPage && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenMushafPage(v.mushafPage)}
-                        className="min-h-[32px] px-3 py-1 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 cursor-pointer shrink-0"
-                      >
-                        المصحف (ص {toArabicNumerals(v.mushafPage)})
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {onOpenDawahCard && (
+                        <button
+                          type="button"
+                          data-testid={`thematic-share-card-btn-${v.id}`}
+                          onClick={() =>
+                            onOpenDawahCard({
+                              category: 'ayah',
+                              headerBadgeAr: `سُورَةُ ${v.surahNameAr} · الآية ${toArabicNumerals(v.ayahNumber)} · صفحة ${toArabicNumerals(v.mushafPage)}`,
+                              titleAr: v.topicTitleAr,
+                              mainArabicText: v.uthmaniText,
+                              explanationOrVirtueAr: v.reflectionAr,
+                              sourceAndGradingAr: `الموضوع: ${v.topicTitleAr}`,
+                            })
+                          }
+                          className="min-h-[32px] px-2.5 py-1 rounded-xl border border-[#14532D]/20 bg-[#14532D]/8 text-[#14532D] text-xs font-semibold hover:bg-[#14532D]/15 flex items-center gap-1 cursor-pointer"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>بطاقة دعوية</span>
+                        </button>
+                      )}
+                      {onOpenMushafPage && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenMushafPage(v.mushafPage)}
+                          className="min-h-[32px] px-3 py-1 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 cursor-pointer shrink-0"
+                        >
+                          المصحف (ص {toArabicNumerals(v.mushafPage)})
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <p className="font-quran text-xl sm:text-2xl text-stone-900 leading-[2.15] text-right py-1">

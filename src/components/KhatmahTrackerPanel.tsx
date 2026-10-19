@@ -4,6 +4,8 @@ import {
   Plus,
   RotateCcw,
   Copy,
+  Heart,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   KhatmahPlanState,
@@ -18,6 +20,11 @@ import {
 } from '../utils/islamicFeatures';
 import { toArabicNumerals } from '../utils/astronomy';
 import { JUZ_NAMES_AR } from '../data/quranData';
+import {
+  loadWaqfDedicationConfig,
+  formatWaqfDedicationLineAr,
+  type WaqfDedicationConfig,
+} from '../utils/dawahShareCards';
 
 const KHATMAH_STORAGE_KEY = 'almihrab_khatmah_plan_v1';
 const GROUP_KHATMAH_STORAGE_KEY = 'almihrab_group_khatmah_v1';
@@ -59,8 +66,20 @@ function createDefaultGroupAssignments(): GroupJuzAssignment[] {
   }));
 }
 
-export const KhatmahTrackerPanel: React.FC = () => {
+interface KhatmahTrackerPanelProps {
+  waqfConfig?: WaqfDedicationConfig;
+  onOpenWaqfModal?: () => void;
+}
+
+export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
+  waqfConfig,
+  onOpenWaqfModal,
+}) => {
   const [khatmahMode, setKhatmahMode] = useState<'individual' | 'group'>('individual');
+  const activeWaqf = useMemo(
+    () => waqfConfig || loadWaqfDedicationConfig(),
+    [waqfConfig]
+  );
 
   const [plan, setPlan] = useState<KhatmahPlanState>(() => {
     try {
@@ -251,6 +270,40 @@ export const KhatmahTrackerPanel: React.FC = () => {
 
   return (
     <div className="space-y-5" data-testid="khatmah-tracker-panel">
+      {/* Waqf & Sadaqah Jariyah Dedication Banner for the Khatmah */}
+      <div
+        data-testid="khatmah-waqf-banner"
+        className="rounded-2xl bg-[#FAF5E8] border border-[#B59E7A] p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+      >
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-bold text-[#14532D]">
+            <Heart className="w-3.5 h-3.5 text-[#78350F] shrink-0" />
+            <span>{formatWaqfDedicationLineAr(activeWaqf)}</span>
+          </div>
+          <p className="text-xs text-stone-700 leading-relaxed">
+            {activeWaqf.enabled && activeWaqf.customDuaAr
+              ? `«${activeWaqf.customDuaAr}»`
+              : 'اجعل ثواب ختمتك القرآنية صدقةً جاريةً خالصةً لوجه الله أو أهدِ ثوابها لروح متوفى أو للوالدين مع بطاقة وقف مصوّرة.'}
+          </p>
+        </div>
+
+        {onOpenWaqfModal && (
+          <button
+            type="button"
+            data-testid="khatmah-open-waqf-btn"
+            onClick={onOpenWaqfModal}
+            className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] hover:bg-[#14532D]/90 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>
+              {activeWaqf.enabled
+                ? 'بطاقة الوقف وتعديل الإهداء'
+                : 'تخصيص إهداء الختمة وبطاقة وقف'}
+            </span>
+          </button>
+        )}
+      </div>
+
       {/* Mode Switcher: Individual vs Family/Group Khatmah */}
       <div
         role="tablist"

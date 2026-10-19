@@ -14,6 +14,12 @@ import {
   getPostPrayerTasbihStage,
 } from './islamicFeatures.ts';
 import { VERIFIED_CITIES } from './astronomy.ts';
+import {
+  formatWaqfDedicationLineAr,
+  buildWaqfShareUrl,
+  parseWaqfFromSearchParams,
+  buildWaqfCertificateCardPayload,
+} from './dawahShareCards.ts';
 
 test('Islamic Inheritance: Husband + 1 Son + 1 Daughter distributes 1/4 to Husband and 3/4 in 2:1 ratio', () => {
   const res = calculateInheritance({
@@ -209,3 +215,29 @@ test('Masbahah 33-Bead Engine: tracks lit beads, 33-cycle milestones, and guided
   assert.equal(st100.isTargetMilestoneReached, true);
   assert.equal(st100.progressPercent, 100);
 });
+
+test('Waqf & Dawah Share Cards: formats dedication line, roundtrips share URL params, and builds certificate payload', () => {
+  const customWaqf = {
+    enabled: true,
+    category: 'parents_mercy' as const,
+    recipientName: 'والديّ الكريمين رحمهما الله',
+    customDuaAr: 'رب ارحمهما كما ربياني صغيرا',
+    includeOnShareCards: true,
+  };
+
+  const line = formatWaqfDedicationLineAr(customWaqf);
+  assert.ok(line.includes('والديّ الكريمين رحمهما الله'));
+
+  const shareUrl = buildWaqfShareUrl('https://almihrab.example.com/', customWaqf);
+  const parsedUrl = new URL(shareUrl);
+  const roundtripped = parseWaqfFromSearchParams(parsedUrl.searchParams);
+  assert.ok(roundtripped);
+  assert.equal(roundtripped.category, 'parents_mercy');
+  assert.equal(roundtripped.recipientName, 'والديّ الكريمين رحمهما الله');
+
+  const certPayload = buildWaqfCertificateCardPayload(customWaqf, 3);
+  assert.equal(certPayload.category, 'waqf');
+  assert.ok(certPayload.titleAr.includes('والديّ الكريمين رحمهما الله'));
+  assert.ok(certPayload.mainArabicText.includes('رب ارحمهما كما ربياني صغيرا'));
+});
+

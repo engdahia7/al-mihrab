@@ -9,6 +9,7 @@ import {
   Volume2,
   VolumeX,
   Smartphone,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   ADHKAR_CATEGORIES,
@@ -33,6 +34,7 @@ import {
   playAlertSoundTone,
   stopActiveAdhanAudio,
 } from '../utils/soundPlayer';
+import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const ADHKAR_PROGRESS_KEY = 'almihrab_adhkar_progress_v1';
 const TASBIH_COUNT_KEY = 'almihrab_tasbih_total_v1';
@@ -41,10 +43,12 @@ const FAJR_ALARM_STORAGE_KEY = 'almihrab_smart_fajr_alarm_v1';
 
 interface AdhkarViewProps {
   selectedCity?: CityLocation;
+  onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
 }
 
 export const AdhkarView: React.FC<AdhkarViewProps> = ({
   selectedCity = VERIFIED_CITIES[0],
+  onOpenDawahCard,
 }) => {
   const [activeCategory, setActiveCategory] =
     useState<AdhkarCategoryId>('morning');
@@ -592,6 +596,27 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
                           className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 cursor-pointer"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {onOpenDawahCard && (
+                        <button
+                          type="button"
+                          data-testid={`dhikr-share-card-btn-${item.id}`}
+                          onClick={() =>
+                            onOpenDawahCard({
+                              category: 'dhikr',
+                              headerBadgeAr: `${currentCategorySpec.nameAr} · حصن المسلم`,
+                              titleAr: item.titleAr,
+                              mainArabicText: item.arabicText,
+                              explanationOrVirtueAr: item.virtueAr,
+                              sourceAndGradingAr: `${item.sourceAr} (${item.gradingAr}) · التكرار: ${toArabicNumerals(item.targetCount)}`,
+                            })
+                          }
+                          aria-label={`تصميم بطاقة دعوية لذكر ${item.titleAr}`}
+                          className="min-h-[30px] px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#14532D]/15 bg-[#14532D]/8 border border-[#14532D]/20 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>بطاقة دعوية</span>
                         </button>
                       )}
                       <button

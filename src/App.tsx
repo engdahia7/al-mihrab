@@ -27,12 +27,21 @@ import { QiblaAndSourcesView } from './components/QiblaAndSourcesView';
 import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
+import { DawahCardModal } from './components/DawahCardModal';
 import {
   WidgetSizePreset,
   WidgetThemeId,
   WidgetCardId,
 } from './utils/widgetEngine';
 import { detectUserLocation } from './utils/geolocationService';
+import {
+  loadWaqfDedicationConfig,
+  saveWaqfDedicationConfig,
+  formatWaqfDedicationLineAr,
+  buildWaqfShareUrl,
+  type WaqfDedicationConfig,
+  type DawahShareCardPayload,
+} from './utils/dawahShareCards';
 
 export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
 
@@ -185,11 +194,51 @@ export default function App() {
   const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState<boolean>(false);
   const [copiedWaqfShare, setCopiedWaqfShare] = useState<boolean>(false);
 
+  const [waqfConfig, setWaqfConfig] = useState<WaqfDedicationConfig>(() =>
+    loadWaqfDedicationConfig()
+  );
+  const [dawahModalState, setDawahModalState] = useState<{
+    isOpen: boolean;
+    payload: DawahShareCardPayload | null;
+    mode: 'card' | 'waqf_settings';
+  }>({
+    isOpen: false,
+    payload: null,
+    mode: 'card',
+  });
+
+  const handleSaveWaqfConfig = (next: WaqfDedicationConfig) => {
+    setWaqfConfig(next);
+    saveWaqfDedicationConfig(next);
+  };
+
+  const handleOpenDawahCard = (payload: DawahShareCardPayload) => {
+    setDawahModalState({
+      isOpen: true,
+      payload,
+      mode: 'card',
+    });
+  };
+
+  const handleOpenWaqfModal = () => {
+    setDawahModalState({
+      isOpen: true,
+      payload: null,
+      mode: 'waqf_settings',
+    });
+  };
+
   const handleShareWaqfApp = async () => {
-    const shareUrl = window.location.origin + window.location.pathname;
-    const shareTitle = 'المحراب — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته';
-    const shareText =
-      'تطبيق «المحراب» — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته | نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله. هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم:';
+    const shareUrl = buildWaqfShareUrl(
+      window.location.origin + window.location.pathname,
+      waqfConfig
+    );
+    const shareTitle = waqfConfig.enabled
+      ? `المحراب — ${formatWaqfDedicationLineAr(waqfConfig)}`
+      : 'المحراب — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته';
+    const shareText = waqfConfig.enabled
+      ? `${formatWaqfDedicationLineAr(waqfConfig)}\n«${waqfConfig.customDuaAr}»\nتطبيق «المحراب» — نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله:`
+      : 'تطبيق «المحراب» — في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته | نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله. هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم:';
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -402,10 +451,18 @@ export default function App() {
           <QuranView
             initialPage={targetMushafPage}
             onExitMushaf={() => handleSelectTab('prayers')}
+            waqfConfig={waqfConfig}
+            onOpenDawahCard={handleOpenDawahCard}
+            onOpenWaqfModal={handleOpenWaqfModal}
           />
         )}
 
-        {activeTab === 'adhkar' && <AdhkarView selectedCity={selectedCity} />}
+        {activeTab === 'adhkar' && (
+          <AdhkarView
+            selectedCity={selectedCity}
+            onOpenDawahCard={handleOpenDawahCard}
+          />
+        )}
 
         {activeTab === 'duas' && (
           <DuasView
@@ -413,6 +470,8 @@ export default function App() {
               setTargetMushafPage(pageNum);
               handleSelectTab('quran');
             }}
+            onOpenDawahCard={handleOpenDawahCard}
+            onOpenWaqfModal={handleOpenWaqfModal}
           />
         )}
 
@@ -432,8 +491,8 @@ export default function App() {
       {/* Waqf & Sadaqah Jariyah Dedication Footer (Visible on Mobile & Desktop) */}
       <footer className="border-t border-stone-200 bg-[#F7F4EE] mt-6 pb-20 md:pb-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-4">
-          {/* Combined Slogan Card */}
-          <div className="rounded-2xl bg-[#FBF9F5] border border-[#14532D]/20 px-4 py-4 sm:px-6 sm:py-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          {/* Combined Slogan & Waqf Dedication Card */}
+          <div className="rounded-2xl bg-[#FBF9F5] border border-[#14532D]/20 px-4 py-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xs">
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#14532D] text-white">
@@ -446,25 +505,54 @@ export default function App() {
               <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-medium">
                 نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله — هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم.
               </p>
+              {waqfConfig.enabled && (
+                <div
+                  data-testid="active-waqf-dedication-strip"
+                  className="mt-2 pt-2 border-t border-[#14532D]/15 text-xs text-[#78350F] font-semibold"
+                >
+                  <span>{formatWaqfDedicationLineAr(waqfConfig)}</span>
+                  {waqfConfig.customDuaAr && (
+                    <span className="block text-stone-700 font-normal mt-0.5">
+                      «{waqfConfig.customDuaAr}»
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleShareWaqfApp}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 transition-colors cursor-pointer shrink-0 w-full md:w-auto"
-            >
-              {copiedWaqfShare ? (
-                <>
-                  <Check className="w-4 h-4 text-[#14532D]" />
-                  <span>تم نسخ رابط الوقف للمشاركة في الأجر</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-4 h-4 text-[#14532D]" />
-                  <span>شاركه صدقةً جاريةً ليعمّ الأجر</span>
-                </>
-              )}
-            </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 w-full lg:w-auto">
+              <button
+                type="button"
+                data-testid="footer-open-waqf-modal-btn"
+                onClick={handleOpenWaqfModal}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#78350F] hover:bg-[#78350F]/90 text-white transition-colors cursor-pointer"
+              >
+                <Heart className="w-4 h-4" />
+                <span>
+                  {waqfConfig.enabled
+                    ? 'بطاقة الوقف وتعديل الإهداء'
+                    : 'إهداء الصدقة الجارية (وقف للوالدين أو متوفى)'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareWaqfApp}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 transition-colors cursor-pointer"
+              >
+                {copiedWaqfShare ? (
+                  <>
+                    <Check className="w-4 h-4 text-[#14532D]" />
+                    <span>تم نسخ رابط الوقف للمشاركة في الأجر</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-[#14532D]" />
+                    <span>شاركه صدقةً جاريةً ليعمّ الأجر</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Editorial Links & Sources Row */}
@@ -536,6 +624,18 @@ export default function App() {
           })}
         </div>
       </nav>
+
+      {/* Global Da'wah Share Card & Waqf Dedication Studio Modal */}
+      <DawahCardModal
+        isOpen={dawahModalState.isOpen}
+        onClose={() =>
+          setDawahModalState((prev) => ({ ...prev, isOpen: false }))
+        }
+        initialPayload={dawahModalState.payload}
+        waqfConfig={waqfConfig}
+        onSaveWaqfConfig={handleSaveWaqfConfig}
+        initialMode={dawahModalState.mode}
+      />
     </div>
   );
 }

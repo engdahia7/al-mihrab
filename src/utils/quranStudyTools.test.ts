@@ -7,6 +7,9 @@ import {
   computeNextMemorizationStep,
   createSavedReadingStop,
   formatReadingStopLabelAr,
+  isCeremonialCenteredMushafBlock,
+  getMushafTypographySpec,
+  getTafsirPopoverVerseClass,
 } from './quranStudyTools.ts';
 
 test('normalizeArabicForQuranSearch strips tashkeel, dagger alef, and normalizes hamzas', () => {
@@ -89,3 +92,24 @@ test('createSavedReadingStop and formatReadingStopLabelAr format stopping point 
   assert.equal(stop.pageNumber, 42);
   assert.equal(formatReadingStopLabelAr(stop), 'سورة البقرة · الآية ٢٥٥ (ص ٤٢)');
 });
+
+test('Mushaf typography scale and alignment: centers ceremonial pages (1, 2, short Juz Amma) and justifies standard pages', () => {
+  assert.equal(isCeremonialCenteredMushafBlock(1, 1, 180), true);
+  assert.equal(isCeremonialCenteredMushafBlock(2, 2, 210), true);
+  // Standard page in Al-Baqarah (e.g., Page 42 with 4 long verses) must be justified (false), not centered
+  assert.equal(isCeremonialCenteredMushafBlock(42, 2, 720), false);
+  // Short Juz Amma surah block on Page 604 (Al-Ikhlas) is centered
+  assert.equal(isCeremonialCenteredMushafBlock(604, 112, 110), true);
+
+  const level2 = getMushafTypographySpec(2, false);
+  const level5 = getMushafTypographySpec(5, false);
+  assert.equal(level2.level, 2);
+  assert.equal(level2.labelAr, 'متوسط');
+  assert.equal(level5.level, 5);
+  assert.equal(level5.labelAr, 'مكبّر');
+
+  // Long verse in Tafsir modal gets compact justified sizing
+  assert.ok(getTafsirPopoverVerseClass(300).includes('text-justify'));
+  assert.ok(getTafsirPopoverVerseClass(60).includes('text-center'));
+});
+

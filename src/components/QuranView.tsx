@@ -51,6 +51,10 @@ import {
   createSavedReadingStop,
   formatReadingStopLabelAr,
   READING_STOP_STORAGE_KEY,
+  MUSHAF_FONT_SIZE_STORAGE_KEY,
+  isCeremonialCenteredMushafBlock,
+  getMushafTypographySpec,
+  getTafsirPopoverVerseClass,
   type QuranSearchResult,
   type MemorizationLoopState,
   type SavedReadingStop,
@@ -65,11 +69,19 @@ interface QuranBookmark {
   savedAt: string;
 }
 
+import type {
+  DawahShareCardPayload,
+  WaqfDedicationConfig,
+} from '../utils/dawahShareCards';
+
 export type MushafThemeMode = 'classic' | 'sepia' | 'night';
 
 interface QuranViewProps {
   onExitMushaf?: () => void;
   initialPage?: number | null;
+  waqfConfig?: WaqfDedicationConfig;
+  onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
+  onOpenWaqfModal?: () => void;
 }
 
 const BOOKMARK_STORAGE_KEY = 'almihrab_quran_bookmarks_v2';
@@ -79,6 +91,9 @@ const MUSHAF_THEME_STORAGE_KEY = 'almihrab_mushaf_theme_v1';
 export const QuranView: React.FC<QuranViewProps> = ({
   onExitMushaf,
   initialPage,
+  waqfConfig,
+  onOpenDawahCard,
+  onOpenWaqfModal,
 }) => {
   // Active modal overlay when opened from the tap-to-toggle HUD or Ayah click
   const [activeOverlay, setActiveOverlay] = useState<
@@ -178,8 +193,24 @@ export const QuranView: React.FC<QuranViewProps> = ({
   const [revelationFilter, setRevelationFilter] = useState<
     'ALL' | 'مكية' | 'مدنية'
   >('ALL');
-  const [fontSizeLevel, setFontSizeLevel] = useState<number>(2); // 1..4
+  const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(MUSHAF_FONT_SIZE_STORAGE_KEY));
+      if (saved >= 1 && saved <= 5) return saved;
+    } catch {
+      // ignore
+    }
+    return 2; // 1..5 (2 = متوسط القياسي)
+  });
   const [reciterId, setReciterId] = useState<string>(VERIFIED_RECITERS[0].id);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MUSHAF_FONT_SIZE_STORAGE_KEY, String(fontSizeLevel));
+    } catch {
+      // ignore
+    }
+  }, [fontSizeLevel]);
 
   // Selected Ayah (for Tafsir, Audio & Saved Stop)
   const [selectedAyahRef, setSelectedAyahRef] = useState<{
@@ -1027,14 +1058,10 @@ export const QuranView: React.FC<QuranViewProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeOverlay, selectedPageNum]);
 
-  const fontSizeClass =
-    fontSizeLevel === 1
-      ? 'text-xl sm:text-2xl'
-      : fontSizeLevel === 2
-      ? 'text-2xl sm:text-3xl'
-      : fontSizeLevel === 3
-      ? 'text-3xl sm:text-4xl'
-      : 'text-3xl sm:text-[42px]';
+  const baseTypographySpec = useMemo(
+    () => getMushafTypographySpec(fontSizeLevel, false),
+    [fontSizeLevel]
+  );
 
   // Theme palette classes for Classic Cream, Sepia Parchment, and Night Mode
   const themeStyles = useMemo(() => {
@@ -1269,21 +1296,25 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 className="w-24 sm:w-36 accent-[#14532D] cursor-pointer"
               />
 
-              <div className="flex items-center gap-0.5 bg-white/15 rounded-lg px-1.5 py-0.5 shrink-0">
+              <div className="flex items-center gap-1 bg-white/15 rounded-lg px-1.5 py-0.5 shrink-0">
                 <button
                   type="button"
                   aria-label="تصغير خط المصحف"
+                  disabled={fontSizeLevel <= 1}
                   onClick={() => setFontSizeLevel((l) => Math.max(1, l - 1))}
-                  className="p-1 text-white/90 hover:text-white cursor-pointer"
+                  className="p-1 text-white/90 hover:text-white disabled:opacity-35 cursor-pointer"
                 >
                   <Minus className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-[11px] px-0.5 font-medium">خط</span>
+                <span className="text-[11px] px-1 font-semibold whitespace-nowrap">
+                  الخط: {baseTypographySpec.labelAr}
+                </span>
                 <button
                   type="button"
                   aria-label="تكبير خط المصحف"
-                  onClick={() => setFontSizeLevel((l) => Math.min(4, l + 1))}
-                  className="p-1 text-white/90 hover:text-white cursor-pointer"
+                  disabled={fontSizeLevel >= 5}
+                  onClick={() => setFontSizeLevel((l) => Math.min(5, l + 1))}
+                  className="p-1 text-white/90 hover:text-white disabled:opacity-35 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
@@ -1304,22 +1335,63 @@ export const QuranView: React.FC<QuranViewProps> = ({
             ? 'none'
             : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}
-        className={`w-full max-w-4xl mx-auto flex-1 flex flex-col justify-between ${themeStyles.sheetBg} border-2 rounded-2xl p-2 sm:p-5 shadow-md transition-colors duration-200`}
+        className={`w-full max-w-4xl mx-auto flex-1 flex flex-col justify-between ${themeStyles.sheetBg} border-2 rounded-2xl p-2 sm:p-4 shadow-md transition-colors duration-200`}
       >
-        {/* Top Mushaf Margin: Juz Name (Right) · Surah Name (Center) · Page Number & Resume Stop (Left) */}
+        {/* Top Mushaf Margin: Juz Name (Right) · Surah Name (Center) · Direct Font Control, Resume Stop & Page Number (Left) */}
         <div
-          className={`flex flex-wrap items-center justify-between gap-1.5 px-2 sm:px-4 pb-1.5 border-b ${themeStyles.headerBorder} text-xs sm:text-sm font-semibold`}
+          className={`flex flex-wrap items-center justify-between gap-1.5 px-2 sm:px-3.5 pb-1.5 border-b ${themeStyles.headerBorder} text-[11px] sm:text-xs font-semibold`}
         >
           <span data-testid="mushaf-header-juz" className="whitespace-nowrap">
             {pageHeaderInfo.juzNameAr}
           </span>
           <span
             data-testid="mushaf-header-surah"
-            className={`font-quran text-base sm:text-xl ${themeStyles.headerTitle} font-bold truncate max-w-[165px] sm:max-w-none`}
+            className={`font-quran text-sm sm:text-base ${themeStyles.headerTitle} font-bold truncate max-w-[145px] sm:max-w-none`}
           >
             {pageHeaderInfo.surahNamesOnPage}
           </span>
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-1.5 sm:gap-2"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            {/* Direct Quick Font Size Control on Mushaf Header */}
+            <div
+              role="group"
+              aria-label="حجم خط المصحف"
+              className={`inline-flex items-center gap-0.5 rounded-lg border px-1 py-0.5 ${themeStyles.cartoucheBadge}`}
+            >
+              <button
+                type="button"
+                data-testid="mushaf-top-font-decrease-btn"
+                aria-label="تصغير خط المصحف"
+                disabled={fontSizeLevel <= 1}
+                onClick={() => setFontSizeLevel((l) => Math.max(1, l - 1))}
+                className="px-1 py-0.5 text-[10px] sm:text-[11px] font-bold disabled:opacity-35 cursor-pointer"
+                title="تصغير حجم خط الآيات"
+              >
+                أ-
+              </button>
+              <span
+                data-testid="mushaf-font-size-label"
+                className="text-[10px] font-semibold px-0.5 hidden sm:inline whitespace-nowrap"
+              >
+                {baseTypographySpec.labelAr}
+              </span>
+              <button
+                type="button"
+                data-testid="mushaf-top-font-increase-btn"
+                aria-label="تكبير خط المصحف"
+                disabled={fontSizeLevel >= 5}
+                onClick={() => setFontSizeLevel((l) => Math.min(5, l + 1))}
+                className="px-1 py-0.5 text-[10px] sm:text-[11px] font-bold disabled:opacity-35 cursor-pointer"
+                title="تكبير حجم خط الآيات"
+              >
+                أ+
+              </button>
+            </div>
+
             {savedReadingStop && (
               <button
                 type="button"
@@ -1328,20 +1400,18 @@ export const QuranView: React.FC<QuranViewProps> = ({
                   e.stopPropagation();
                   handleResumeFromSavedStop(savedReadingStop);
                 }}
-                onMouseDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
                 title={`اضغط لاستكمال القراءة من آخر آية محفوظة: ${formatReadingStopLabelAr(savedReadingStop)}`}
-                className="px-2.5 py-0.5 rounded-lg bg-[#14532D] hover:bg-[#14532D]/90 text-[#FDE68A] text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                className="px-2 py-0.5 rounded-lg bg-[#14532D] hover:bg-[#14532D]/90 text-[#FDE68A] text-[10px] sm:text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
               >
-                <Bookmark className="w-3 h-3 fill-current" />
-                <span>
+                <Bookmark className="w-2.5 h-2.5 fill-current shrink-0" />
+                <span className="truncate max-w-[110px] sm:max-w-none">
                   استكمال: {savedReadingStop.surahNameAr} آية{' '}
                   {toArabicNumerals(savedReadingStop.ayahNumber)}
                 </span>
               </button>
             )}
             <span data-testid="mushaf-header-page" className="whitespace-nowrap">
-              صفحة {toArabicNumerals(pageHeaderInfo.pageNum)}
+              ص {toArabicNumerals(pageHeaderInfo.pageNum)}
             </span>
           </div>
         </div>
@@ -1351,7 +1421,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
           className={`my-1.5 flex-1 flex flex-col border-2 ${themeStyles.innerFrameBg} rounded-xl p-1 sm:p-1.5`}
         >
           <div
-            className={`flex-1 border ${themeStyles.pageCanvasBg} rounded-lg px-3 py-3.5 sm:px-9 sm:py-7 flex flex-col justify-between space-y-4`}
+            className={`flex-1 border ${themeStyles.pageCanvasBg} rounded-lg px-3 py-3 sm:px-7 sm:py-5 flex flex-col justify-between space-y-3.5`}
           >
             {isLoadingContent ? (
               <div className="py-20 text-center space-y-3 my-auto" role="status">
@@ -1402,7 +1472,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
               </div>
             ) : (
               /* AUTHENTIC PRINTED MUSHAF PAGE FLOW */
-              <div className="space-y-5 sm:space-y-7 my-auto">
+              <div className="space-y-4 sm:space-y-5 my-auto">
                 {activeMushafBlocks.map((block) => {
                   const sMeta =
                     ALL_SURAHS.find((s) => s.number === block.surahNumber) ||
@@ -1415,40 +1485,51 @@ export const QuranView: React.FC<QuranViewProps> = ({
                   );
                   const bodyAyahs = block.ayahs;
 
-                  const isCenteredShortPage =
-                    sMeta.number === 1 || block.ayahs.length <= 8;
+                  const totalBlockChars = bodyAyahs.reduce(
+                    (acc, a) => acc + (a.textUthmani?.length || 0),
+                    0
+                  );
+                  const isCenteredShortPage = isCeremonialCenteredMushafBlock(
+                    selectedPageNum,
+                    sMeta.number,
+                    totalBlockChars
+                  );
+                  const blockTypo = getMushafTypographySpec(
+                    fontSizeLevel,
+                    isCenteredShortPage
+                  );
 
                   return (
                     <section
                       key={`${block.surahNumber}-${firstAyahNum}`}
-                      className="space-y-3 sm:space-y-4"
+                      className="space-y-2.5 sm:space-y-3"
                       data-testid={`mushaf-surah-block-${sMeta.number}`}
                     >
                       {/* Ornamental Surah Header Cartouche */}
                       {startsAtBeginningOfSurah && (
                         <div
-                          className={`${themeStyles.cartoucheBg} border rounded-xl px-4 py-2 sm:px-6 sm:py-2.5 text-center space-y-0.5`}
+                          className={`${themeStyles.cartoucheBg} border rounded-xl px-3.5 py-1.5 sm:px-5 sm:py-2 text-center space-y-0.5`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
-                              className={`hidden sm:inline-block text-xs font-medium ${themeStyles.cartoucheSub} whitespace-nowrap`}
+                              className={`hidden sm:inline-block text-[11px] font-medium ${themeStyles.cartoucheSub} whitespace-nowrap`}
                             >
                               ترتيبها {toArabicNumerals(sMeta.number)}
                             </span>
                             <h2
-                              className={`font-quran text-2xl sm:text-3xl font-bold ${themeStyles.headerTitle} whitespace-nowrap mx-auto`}
+                              className={`font-quran ${blockTypo.surahTitleClass} font-bold ${themeStyles.headerTitle} whitespace-nowrap mx-auto leading-snug`}
                             >
                               سُورَةُ {sMeta.nameAr}
                             </h2>
                             <span
-                              className={`hidden sm:inline-block text-xs font-medium ${themeStyles.cartoucheSub} whitespace-nowrap`}
+                              className={`hidden sm:inline-block text-[11px] font-medium ${themeStyles.cartoucheSub} whitespace-nowrap`}
                             >
                               {sMeta.revelationType} · آياتها{' '}
                               {toArabicNumerals(sMeta.ayahCount)}
                             </span>
                           </div>
                           <div
-                            className={`sm:hidden text-[11px] font-medium ${themeStyles.cartoucheSub}`}
+                            className={`sm:hidden text-[10px] font-medium ${themeStyles.cartoucheSub}`}
                           >
                             ترتيبها {toArabicNumerals(sMeta.number)} ·{' '}
                             {sMeta.revelationType} · آياتها{' '}
@@ -1460,7 +1541,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                       {/* Unnumbered Opening Basmalah for all Surahs (except Surah 9 At-Tawbah) */}
                       {showUnnumberedBasmalah && (
                         <div
-                          className={`text-center font-quran text-xl sm:text-3xl ${themeStyles.verseText} py-0.5 select-all`}
+                          className={`text-center font-quran ${blockTypo.basmalahClass} ${themeStyles.verseText} py-0.5 select-all`}
                           data-testid="unnumbered-basmalah"
                         >
                           بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
@@ -1469,11 +1550,11 @@ export const QuranView: React.FC<QuranViewProps> = ({
 
                       {/* Continuous Mushaf Lines with Authentic Inline Quranic Rosettes ﴿١﴾ */}
                       <div
-                        className={`font-quran ${fontSizeClass} ${themeStyles.verseText} ${
+                        className={`font-quran ${blockTypo.verseClass} ${themeStyles.verseText} ${
                           isCenteredShortPage
                             ? 'text-center'
-                            : 'text-center sm:text-justify sm:[text-align-last:center]'
-                        } leading-[2.25] sm:leading-[2.5] tracking-normal`}
+                            : 'text-justify [text-align-last:center]'
+                        } tracking-normal`}
                         dir="rtl"
                       >
                         {bodyAyahs.map((ayah) => {
@@ -1514,7 +1595,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                                 setActiveOverlay('tafsir');
                               }}
                               title="اضغط لعرض التفسير أو حفظ التوقف عند هذه الآية للاستكمال لاحقاً"
-                              className={`inline cursor-pointer rounded px-1 py-0.5 transition-colors ${
+                              className={`inline cursor-pointer rounded px-0.5 py-0.5 transition-colors ${
                                 isStopHere
                                   ? 'bg-[#FDE68A]/55 text-stone-950 ring-1 ring-[#B45309]/50'
                                   : isSelected
@@ -1525,7 +1606,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
                               <span>{cleanVerseText}</span>
                               <span
                                 aria-label={`آية ${ayah.numberInSurah} من سورة ${sMeta.nameAr}`}
-                                className={`inline mx-1 font-quran text-[0.82em] align-baseline select-none ${
+                                className={`${blockTypo.rosetteClass} ${
                                   isStopHere || bookmarked
                                     ? 'text-[#B45309] font-bold'
                                     : isSelected
@@ -2295,17 +2376,25 @@ export const QuranView: React.FC<QuranViewProps> = ({
               </button>
             </div>
 
-            <p className="font-quran text-2xl sm:text-3xl text-stone-900 bg-[#FCF9F2] border border-[#E5DAC3] rounded-xl px-4 py-3 text-center leading-loose">
-              ﴿
-              {sanitizeQuranicText(
+            {(() => {
+              const cleanPopoverVerse = sanitizeQuranicText(
                 stripLeadingBasmalah(
                   activeTafsirContext.ayah.textUthmani,
                   activeTafsirContext.surahMeta.number,
                   activeTafsirContext.ayah.numberInSurah
                 )
-              )}
-              ﴾
-            </p>
+              );
+              const popoverVerseClass = getTafsirPopoverVerseClass(
+                cleanPopoverVerse.length
+              );
+              return (
+                <p
+                  className={`font-quran ${popoverVerseClass} text-stone-900 bg-[#FCF9F2] border border-[#E5DAC3] rounded-xl px-4 py-3`}
+                >
+                  ﴿{cleanPopoverVerse}﴾
+                </p>
+              );
+            })()}
 
             {/* Primary Save Reading Position Bar (حفظ موضع القراءة عند هذه الآية والاستكمال لاحقاً) */}
             <div
@@ -2431,7 +2520,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
               ) : (
                 <p
                   data-testid="ayah-tafsir-text"
-                  className="text-xs sm:text-sm text-stone-800 leading-relaxed"
+                  className="text-sm sm:text-[15px] text-stone-800 leading-[1.9]"
                 >
                   {tafsirEdition === 'jalalayn'
                     ? secondaryTafsirCache[
@@ -2486,18 +2575,56 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 data-testid="ayah-share-card-preview"
                 className="bg-white border border-[#B59E7A] rounded-xl p-3 space-y-2.5 text-center"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-[#14532D]">
                     معاينة البطاقة المصورة للآية الكريمة:
                   </span>
-                  <a
-                    href={shareCardDataUrl}
-                    download={`ayah-${activeTafsirContext.surahMeta.number}-${activeTafsirContext.ayah.numberInSurah}.png`}
-                    className="px-3 py-1 rounded-lg bg-[#14532D] text-white text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>تنزيل الصورة (PNG)</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {onOpenDawahCard && (
+                      <button
+                        type="button"
+                        data-testid="open-dawah-studio-from-ayah-btn"
+                        onClick={() => {
+                          const key = `${activeTafsirContext.surahMeta.number}:${activeTafsirContext.ayah.numberInSurah}`;
+                          const displayedTafsir =
+                            tafsirEdition === 'jalalayn' && secondaryTafsirCache[key]
+                              ? secondaryTafsirCache[key]
+                              : activeTafsirContext.ayah.tafsirMuyassar;
+                          const sourceLabel =
+                            tafsirEdition === 'jalalayn'
+                              ? 'المختصر من تفسير الجلالين والسعدي'
+                              : 'التفسير الميسر · مجمع الملك فهد';
+                          onOpenDawahCard({
+                            category: 'ayah',
+                            headerBadgeAr: `سُورَةُ ${activeTafsirContext.surahMeta.nameAr} · الآية ${toArabicNumerals(
+                              activeTafsirContext.ayah.numberInSurah
+                            )} · صفحة ${toArabicNumerals(
+                              activeTafsirContext.ayah.page || selectedPageNum
+                            )}`,
+                            titleAr: `سورة ${activeTafsirContext.surahMeta.nameAr}`,
+                            mainArabicText: stripLeadingBasmalah(
+                              activeTafsirContext.ayah.textUthmani,
+                              activeTafsirContext.surahMeta.number,
+                              activeTafsirContext.ayah.numberInSurah
+                            ),
+                            explanationOrVirtueAr: displayedTafsir,
+                            sourceAndGradingAr: sourceLabel,
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[#78350F] text-white text-xs font-semibold cursor-pointer"
+                      >
+                        تخصيص الأنماط وحالة واتساب
+                      </button>
+                    )}
+                    <a
+                      href={shareCardDataUrl}
+                      download={`ayah-${activeTafsirContext.surahMeta.number}-${activeTafsirContext.ayah.numberInSurah}.png`}
+                      className="px-3 py-1 rounded-lg bg-[#14532D] text-white text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>تنزيل الصورة (PNG)</span>
+                    </a>
+                  </div>
                 </div>
                 <img
                   src={shareCardDataUrl}
@@ -2652,7 +2779,10 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <KhatmahTrackerPanel />
+            <KhatmahTrackerPanel
+              waqfConfig={waqfConfig}
+              onOpenWaqfModal={onOpenWaqfModal}
+            />
           </div>
         </div>
       )}

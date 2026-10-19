@@ -727,3 +727,121 @@ export function formatReadingStopLabelAr(stop: SavedReadingStop): string {
   return `سورة ${stop.surahNameAr} · الآية ${toArabicNumerals(stop.ayahNumber)} (ص ${toArabicNumerals(stop.pageNumber)})`;
 }
 
+export const MUSHAF_FONT_SIZE_STORAGE_KEY = 'almihrab_mushaf_font_level_v1';
+
+export interface MushafTypographySpec {
+  level: 1 | 2 | 3 | 4 | 5;
+  labelAr: string;
+  verseClass: string;
+  basmalahClass: string;
+  surahTitleClass: string;
+  rosetteClass: string;
+}
+
+/**
+ * Determines whether a Mushaf surah block on a page should be centered (ceremonial layout)
+ * or justified like a standard 15-line printed Madinah Mushaf page.
+ * Only Page 1 (Al-Fatihah), Page 2 (opening of Al-Baqarah), or very short Juz Amma surah blocks
+ * (<= 240 chars in surahs 93..114) are centered; all standard Mushaf pages (including pages
+ * with 1–8 long verses like Ayat Al-Kursi or Ayat Al-Dayn) are justified.
+ */
+export function isCeremonialCenteredMushafBlock(
+  pageNumber: number,
+  surahNumber: number,
+  totalBlockChars: number
+): boolean {
+  if (pageNumber === 1 || pageNumber === 2) {
+    return true;
+  }
+  if (surahNumber >= 93 && totalBlockChars <= 240) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Returns calibrated, proportional typography classes for the Mushaf page
+ * across 5 distinct user-selectable font size levels (1 = صغير .. 5 = مكبّر).
+ */
+export function getMushafTypographySpec(
+  rawLevel: number,
+  isCeremonialShortBlock: boolean = false
+): MushafTypographySpec {
+  const level = Math.max(1, Math.min(5, Math.round(rawLevel || 2))) as 1 | 2 | 3 | 4 | 5;
+  const rosetteClass =
+    'inline-block mx-0.5 font-quran text-[0.76em] align-baseline whitespace-nowrap select-none';
+
+  switch (level) {
+    case 1:
+      return {
+        level: 1,
+        labelAr: 'صغير',
+        verseClass: isCeremonialShortBlock
+          ? 'text-[20px] sm:text-[23px] leading-[2.2] sm:leading-[2.3]'
+          : 'text-[17px] sm:text-[19px] md:text-[20px] leading-[2.05] sm:leading-[2.15]',
+        basmalahClass: 'text-[18px] sm:text-[20px] leading-[2.0]',
+        surahTitleClass: 'text-[18px] sm:text-[20px]',
+        rosetteClass,
+      };
+    case 2:
+      return {
+        level: 2,
+        labelAr: 'متوسط',
+        verseClass: isCeremonialShortBlock
+          ? 'text-[22px] sm:text-[26px] leading-[2.25] sm:leading-[2.35]'
+          : 'text-[19px] sm:text-[22px] md:text-[23px] leading-[2.12] sm:leading-[2.22]',
+        basmalahClass: 'text-[20px] sm:text-[23px] leading-[2.05]',
+        surahTitleClass: 'text-[20px] sm:text-[23px]',
+        rosetteClass,
+      };
+    case 3:
+      return {
+        level: 3,
+        labelAr: 'كبير',
+        verseClass: isCeremonialShortBlock
+          ? 'text-[25px] sm:text-[29px] leading-[2.3] sm:leading-[2.4]'
+          : 'text-[21px] sm:text-[25px] md:text-[26px] leading-[2.18] sm:leading-[2.28]',
+        basmalahClass: 'text-[22px] sm:text-[25px] leading-[2.1]',
+        surahTitleClass: 'text-[22px] sm:text-[25px]',
+        rosetteClass,
+      };
+    case 4:
+      return {
+        level: 4,
+        labelAr: 'كبير جداً',
+        verseClass: isCeremonialShortBlock
+          ? 'text-[27px] sm:text-[32px] leading-[2.32] sm:leading-[2.42]'
+          : 'text-[24px] sm:text-[28px] md:text-[30px] leading-[2.22] sm:leading-[2.32]',
+        basmalahClass: 'text-[24px] sm:text-[28px] leading-[2.15]',
+        surahTitleClass: 'text-[24px] sm:text-[27px]',
+        rosetteClass,
+      };
+    case 5:
+      return {
+        level: 5,
+        labelAr: 'مكبّر',
+        verseClass: isCeremonialShortBlock
+          ? 'text-[30px] sm:text-[35px] leading-[2.35] sm:leading-[2.45]'
+          : 'text-[26px] sm:text-[31px] md:text-[34px] leading-[2.25] sm:leading-[2.38]',
+        basmalahClass: 'text-[26px] sm:text-[30px] leading-[2.15]',
+        surahTitleClass: 'text-[25px] sm:text-[29px]',
+        rosetteClass,
+      };
+  }
+}
+
+/**
+ * Returns a balanced font-size and line-height class for displaying a single Ayah
+ * inside the Tafsir & Study popover so long verses (like Ayat Al-Kursi or Ayat Al-Dayn)
+ * remain readable without overflowing the modal.
+ */
+export function getTafsirPopoverVerseClass(charLength: number): string {
+  if (charLength > 240) {
+    return 'text-[18px] sm:text-[21px] leading-[2.05] text-justify [text-align-last:center]';
+  }
+  if (charLength > 120) {
+    return 'text-[20px] sm:text-[23px] leading-[2.15] text-center';
+  }
+  return 'text-[22px] sm:text-[25px] leading-[2.2] text-center';
+}
+
