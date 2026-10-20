@@ -17,6 +17,7 @@ import {
   Moon,
   Maximize2,
   Minimize2,
+  BookOpen,
 } from 'lucide-react';
 import { toArabicNumerals } from '../utils/astronomy';
 import {
@@ -45,24 +46,43 @@ import {
   DAILY_INSPIRATION_PRESETS,
   getDailyInspirationPresetForDate,
   presetToDawahCardPayload,
+  PropheticSunnahCategoryId,
+  PROPHETIC_SUNNAH_CATEGORIES,
+  VERIFIED_PROPHETIC_SUNNAHS,
+  PropheticSunnahTrackerState,
+  loadSunnahTrackerState,
+  saveSunnahTrackerState,
+  toggleSunnahAppliedForDate,
+  getSunnahOfTheDay,
+  calculateSunnahRevivalAnalytics,
+  sunnahItemToDawahCardPayload,
 } from '../utils/worshipTrackerAndTools';
-import { playAlertSoundTone } from '../utils/soundPlayer';
 import { triggerMasbahaTactileFeedback } from '../utils/islamicFeatures';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
+import { SpecialPrayersAndIstikharaGuide } from './SpecialPrayersAndIstikharaGuide';
+import { ProphetsStoriesEncyclopedia } from './ProphetsStoriesEncyclopedia';
 
 interface WorshipAndQadaHubProps {
   hijriDay: number;
   hijriMonthNameAr: string;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
+  onOpenMushafPage?: (pageNum: number) => void;
 }
 
 export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
   hijriDay,
   hijriMonthNameAr,
   onOpenDawahCard,
+  onOpenMushafPage,
 }) => {
   const [activeSubSection, setActiveSubSection] = useState<
-    'tracker' | 'qada' | 'khushu' | 'daily_card'
+    | 'tracker'
+    | 'sunnah'
+    | 'istikhara_guide'
+    | 'prophets_stories'
+    | 'qada'
+    | 'khushu'
+    | 'daily_card'
   >('tracker');
 
   // =========================================================================
@@ -495,9 +515,63 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
     DAILY_INSPIRATION_PRESETS[selectedPresetIdx] ||
     DAILY_INSPIRATION_PRESETS[0];
 
+  // =========================================================================
+  // 5. ABANDONED SUNNAHS & DAILY PROPHETIC ETIQUETTE STATE
+  // =========================================================================
+  const [sunnahState, setSunnahState] = useState<PropheticSunnahTrackerState>(
+    () => loadSunnahTrackerState()
+  );
+
+  useEffect(() => {
+    saveSunnahTrackerState(sunnahState);
+  }, [sunnahState]);
+
+  const [selectedSunnahCategory, setSelectedSunnahCategory] =
+    useState<PropheticSunnahCategoryId>('all');
+
+  const [featuredSunnahIdx, setFeaturedSunnahIdx] = useState<number>(() => {
+    const todaySunnah = getSunnahOfTheDay();
+    const idx = VERIFIED_PROPHETIC_SUNNAHS.findIndex(
+      (s) => s.id === todaySunnah.id
+    );
+    return idx >= 0 ? idx : 0;
+  });
+
+  const featuredSunnah =
+    VERIFIED_PROPHETIC_SUNNAHS[featuredSunnahIdx] ||
+    VERIFIED_PROPHETIC_SUNNAHS[0];
+
+  const sunnahAnalytics = useMemo(
+    () => calculateSunnahRevivalAnalytics(sunnahState, selectedDateISO),
+    [sunnahState, selectedDateISO]
+  );
+
+  const filteredPropheticSunnahs = useMemo(() => {
+    if (selectedSunnahCategory === 'all') return VERIFIED_PROPHETIC_SUNNAHS;
+    return VERIFIED_PROPHETIC_SUNNAHS.filter(
+      (item) => item.category === selectedSunnahCategory
+    );
+  }, [selectedSunnahCategory]);
+
+  const handleToggleSunnahApplied = (sunnahId: string) => {
+    const currentlyApplied = (
+      sunnahState.appliedByDate[selectedDateISO] || []
+    ).includes(sunnahId);
+
+    setSunnahState((prev) =>
+      toggleSunnahAppliedForDate(prev, selectedDateISO, sunnahId)
+    );
+
+    triggerMasbahaTactileFeedback({
+      soundEnabled: true,
+      hapticEnabled: true,
+      isMilestone: !currentlyApplied,
+    });
+  };
+
   return (
     <section
-      aria-label="سجل المحاسبة اليومي وحاسبة القضاء والخلوة الإيمانية"
+      aria-label="سجل المحاسبة اليومي والسنن النبوية وحاسبة القضاء والخلوة الإيمانية"
       data-testid="worship-and-qada-hub"
       className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-5 shadow-xs"
     >
@@ -505,17 +579,17 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-stone-200 pb-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-display text-base sm:text-lg font-bold text-stone-900">
-            سجل المحاسبة اليومي والقضاء والخلوة
+            سجل المحاسبة اليومي والسنن والاستخارة وقصص الأنبياء
           </h3>
           <span className="text-xs text-stone-500">
-            · الفرائض والسنن الرواتب الـ ١٢ · الصيام · قضاء الفوائت
+            · الفرائض والرواتب · السنن المهجورة · الاستخارة والصلوات · قصص الأنبياء (٢٥)
           </span>
         </div>
 
         <div
           role="tablist"
-          aria-label="أدوات المحاسبة والقضاء والخلوة"
-          className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl shrink-0"
+          aria-label="أدوات المحاسبة والسنن والاستخارة وقصص الأنبياء والقضاء"
+          className="flex flex-wrap gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl"
         >
           <button
             type="button"
@@ -531,6 +605,54 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
           >
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             <span>سجل الصلوات والسنن</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            data-testid="hub-tab-sunnah"
+            aria-selected={activeSubSection === 'sunnah'}
+            onClick={() => setActiveSubSection('sunnah')}
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              activeSubSection === 'sunnah'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-stone-700 hover:bg-stone-200/70'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 shrink-0" />
+            <span>السنن المهجورة والآداب</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            data-testid="hub-tab-istikhara"
+            aria-selected={activeSubSection === 'istikhara_guide'}
+            onClick={() => setActiveSubSection('istikhara_guide')}
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              activeSubSection === 'istikhara_guide'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-stone-700 hover:bg-stone-200/70'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>مرشد الاستخارة والصلوات</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            data-testid="hub-tab-prophets"
+            aria-selected={activeSubSection === 'prophets_stories'}
+            onClick={() => setActiveSubSection('prophets_stories')}
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              activeSubSection === 'prophets_stories'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-stone-700 hover:bg-stone-200/70'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span>قصص الأنبياء وأدعيتهم (٢٥)</span>
           </button>
 
           <button
@@ -953,6 +1075,437 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
                 })}
               </div>
             </div>
+          </div>
+
+          {/* 5. Featured Daily Prophetic Sunnah & Etiquette Card inside Tracker */}
+          <div
+            data-testid="daily-sunnah-preview-card"
+            className="bg-[#FAF6EC] border border-[#C8B696] rounded-xl p-4 sm:p-5 space-y-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#78350F] font-semibold">
+                  <span>٥. سُنّة اليوم والآداب النبوية</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{featuredSunnah.categoryLabelAr}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{featuredSunnah.statusLabelAr}</span>
+                </div>
+                <h4 className="font-display text-sm sm:text-base font-bold text-[#14532D]">
+                  {featuredSunnah.titleAr}
+                </h4>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="preview-apply-sunnah-btn"
+                  onClick={() => handleToggleSunnahApplied(featuredSunnah.id)}
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
+                      ? 'bg-[#14532D] text-white'
+                      : 'bg-white border border-[#14532D]/40 text-[#14532D] hover:bg-[#14532D]/10'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>
+                    {sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
+                      ? 'طبّقتها اليوم ✓'
+                      : 'طبّقتها اليوم'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="open-all-sunnahs-btn"
+                  onClick={() => setActiveSubSection('sunnah')}
+                  className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-bold cursor-pointer"
+                >
+                  عرض كل السنن والآداب ({toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)})
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white/90 border border-[#DFD2BA] rounded-xl p-3.5 space-y-2">
+              <p className="font-quran text-base sm:text-lg text-stone-900 leading-relaxed">
+                {featuredSunnah.hadithArabicText}
+              </p>
+              <p className="text-xs font-bold text-[#78350F]">
+                الدليل ودرجة الحديث: {featuredSunnah.sourceAndGradingAr}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+              <div className="bg-white/80 border border-stone-200/90 rounded-lg p-3 space-y-1">
+                <span className="font-bold text-[#14532D] block">
+                  كيف تطبقها عملياً اليوم؟
+                </span>
+                <p className="text-stone-700 leading-relaxed">
+                  {featuredSunnah.practicalHowToAr}
+                </p>
+              </div>
+              <div className="bg-white/80 border border-stone-200/90 rounded-lg p-3 space-y-1">
+                <span className="font-bold text-[#78350F] block">
+                  الأجر والثمرة النبوية:
+                </span>
+                <p className="text-stone-700 leading-relaxed">
+                  {featuredSunnah.spiritualRewardAr}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 6. Quick Launch Cards for Special Prayers (Istikhara/Tawbah/Hajah) & 25 Prophets Encyclopedia */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-4 rounded-xl bg-[#FCF9F2] border border-[#14532D]/25 flex flex-col justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-[#14532D] block">
+                  ٦. مُرشِد الاستخارة وصلاة التوبة والحاجة والتسبيح
+                </span>
+                <h4 className="font-display text-sm sm:text-base font-bold text-stone-950">
+                  مُركِّب دعاء الاستخارة التفاعلي + سجل القرارات الشخصي
+                </h4>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  اكتب الأمر الذي تستخير فيه ليُدرج تلقائياً في موضعه الصحيح من حديث البخاري المشكول مع تصحيح المفاهيم الشائعة.
+                </p>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  data-testid="open-istikhara-from-tracker-btn"
+                  onClick={() => setActiveSubSection('istikhara_guide')}
+                  className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] hover:bg-[#14532D]/90 text-white text-xs font-bold cursor-pointer"
+                >
+                  فتح مرشد الاستخارة والصلوات ←
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#FCF9F2] border border-[#78350F]/25 flex flex-col justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-[#78350F] block">
+                  ٧. موسوعة قصص الأنبياء في القرآن وأدعيتهم (٢٥ نبياً ورسولاً)
+                </span>
+                <h4 className="font-display text-sm sm:text-base font-bold text-stone-950">
+                  شجرة الأنبياء التفاعلية ومعجزاتهم وأدعيتهم المستجابة بالصوت
+                </h4>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  تصفّح قصص الـ ٢٥ نبياً ورسولاً ونسبهم والسور التي ذُكروا فيها واستمع لأدعيتهم القرآنية مع ختمة التدبر.
+                </p>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  data-testid="open-prophets-from-tracker-btn"
+                  onClick={() => setActiveSubSection('prophets_stories')}
+                  className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-bold cursor-pointer"
+                >
+                  فتح موسوعة الأنبياء وأدعيتهم (٢٥) ←
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          SECTION 1C: INTERACTIVE ISTIKHARA, TAWBAH & SPECIAL PRAYERS GUIDE
+         ===================================================================== */}
+      {activeSubSection === 'istikhara_guide' && (
+        <SpecialPrayersAndIstikharaGuide onOpenDawahCard={onOpenDawahCard} />
+      )}
+
+      {/* =====================================================================
+          SECTION 1D: ENCYCLOPEDIA OF THE 25 PROPHETS IN THE QURAN & THEIR DUAS
+         ===================================================================== */}
+      {activeSubSection === 'prophets_stories' && (
+        <ProphetsStoriesEncyclopedia
+          onOpenMushafPage={onOpenMushafPage}
+          onOpenDawahCard={onOpenDawahCard}
+        />
+      )}
+
+      {/* =====================================================================
+          SECTION 1B: ABANDONED SUNNAHS & DAILY PROPHETIC ETIQUETTE (السنن المهجورة والآداب النبوية)
+         ===================================================================== */}
+      {activeSubSection === 'sunnah' && (
+        <div className="space-y-5" data-testid="section-prophetic-sunnahs">
+          {/* Top KPI & Revival Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-[#FBF9F5] border border-[#14532D]/25 p-3.5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-stone-600">
+                <span>السنن المطبّقة في هذا اليوم</span>
+                <CheckCircle2 className="w-4 h-4 text-[#14532D]" />
+              </div>
+              <div
+                data-testid="sunnah-today-applied-count"
+                className="font-tabular text-2xl font-bold text-[#14532D]"
+              >
+                {toArabicNumerals(sunnahAnalytics.todayAppliedCount)} /{' '}
+                {toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)} سُنّة
+              </div>
+              <p className="text-[11px] text-stone-600">
+                «مَنْ أَحْيَا سُنَّةً مِنْ سُنَّتِي فَعَمِلَ بِهَا النَّاسُ كَانَ لَهُ مِثْلُ أَجْرِ مَنْ عَمِلَ بِهَا»
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-[#FBF9F5] border border-stone-200 p-3.5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-stone-600">
+                <span>إجمالي السنن التي أحييتها</span>
+                <Award className="w-4 h-4 text-[#78350F]" />
+              </div>
+              <div className="font-tabular text-2xl font-bold text-[#78350F]">
+                {toArabicNumerals(sunnahAnalytics.uniqueSunnahsRevivedCount)} من{' '}
+                {toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)}
+              </div>
+              <p className="text-[11px] text-stone-600">
+                سنن وآداب نبوية مختلفة طبّقتها عملياً في يومك
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-[#FBF9F5] border border-stone-200 p-3.5 space-y-1">
+              <div className="flex items-center justify-between text-xs text-stone-600">
+                <span>مجموع مرات تطبيق السنن</span>
+                <Flame className="w-4 h-4 text-amber-600" />
+              </div>
+              <div className="font-tabular text-2xl font-bold text-stone-900">
+                {toArabicNumerals(sunnahAnalytics.totalAppliedAllTime)} مرة
+              </div>
+              <p className="text-[11px] text-stone-600">
+                عبر {toArabicNumerals(sunnahAnalytics.activeDaysCount)} أيام مسجّلة في المحراب
+              </p>
+            </div>
+          </div>
+
+          {/* Featured "سُنّة اليوم" Hero Card with Switcher */}
+          <div
+            data-testid="featured-sunnah-of-the-day-card"
+            className="bg-gradient-to-br from-[#14532D] to-[#0E3A20] text-white rounded-2xl p-4 sm:p-6 space-y-4 border border-amber-300/30"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-200">
+                  <span>بطاقة سُنّة اليوم المختارة</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{featuredSunnah.categoryLabelAr}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{featuredSunnah.recommendedTimingAr}</span>
+                </div>
+                <h4 className="font-display text-lg sm:text-xl font-bold text-white">
+                  {featuredSunnah.titleAr}
+                </h4>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="cycle-next-sunnah-btn"
+                  onClick={() =>
+                    setFeaturedSunnahIdx(
+                      (prev) => (prev + 1) % VERIFIED_PROPHETIC_SUNNAHS.length
+                    )
+                  }
+                  className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>سُنّة أخرى ({toArabicNumerals(featuredSunnahIdx + 1)}/{toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)})</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="featured-sunnah-apply-btn"
+                  onClick={() => handleToggleSunnahApplied(featuredSunnah.id)}
+                  className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
+                      ? 'bg-amber-400 text-stone-950'
+                      : 'bg-white text-[#14532D] hover:bg-amber-50'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    {sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
+                      ? 'طبّقتها اليوم ✓'
+                      : 'طبّقتها اليوم'}
+                  </span>
+                </button>
+
+                {onOpenDawahCard && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenDawahCard(sunnahItemToDawahCardPayload(featuredSunnah))
+                    }
+                    className="min-h-[38px] px-3 py-1.5 rounded-xl bg-black/25 hover:bg-black/40 border border-amber-300/30 text-amber-100 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>مشاركة كبطاقة (PNG)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-black/25 border border-amber-300/25 rounded-xl p-4 space-y-2">
+              <p className="font-quran text-lg sm:text-xl text-amber-100 leading-relaxed">
+                {featuredSunnah.hadithArabicText}
+              </p>
+              <p className="text-xs font-bold text-amber-300">
+                الدليل ودرجة الحديث: {featuredSunnah.sourceAndGradingAr}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="bg-white/10 border border-white/15 rounded-xl p-3.5 space-y-1">
+                <span className="font-bold text-amber-200 block">
+                  كيفية تطبيقها عملياً في اليوم:
+                </span>
+                <p className="text-emerald-50 leading-relaxed">
+                  {featuredSunnah.practicalHowToAr}
+                </p>
+              </div>
+              <div className="bg-white/10 border border-white/15 rounded-xl p-3.5 space-y-1">
+                <span className="font-bold text-amber-200 block">
+                  الأجر والثمرة من إحيائها:
+                </span>
+                <p className="text-emerald-50 leading-relaxed">
+                  {featuredSunnah.spiritualRewardAr}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Category Filter Controls */}
+          <div
+            role="tablist"
+            aria-label="تصنيفات السنن المهجورة والآداب النبوية"
+            className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#F7F4EE] border border-stone-200 rounded-xl"
+          >
+            {PROPHETIC_SUNNAH_CATEGORIES.map((cat) => {
+              const isSelected = selectedSunnahCategory === cat.id;
+              const count =
+                cat.id === 'all'
+                  ? VERIFIED_PROPHETIC_SUNNAHS.length
+                  : VERIFIED_PROPHETIC_SUNNAHS.filter((i) => i.category === cat.id)
+                      .length;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  role="tab"
+                  data-testid={`sunnah-cat-${cat.id}`}
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedSunnahCategory(cat.id)}
+                  className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#78350F] text-white shadow-2xs'
+                      : 'text-stone-700 hover:bg-stone-200/70'
+                  }`}
+                >
+                  {cat.labelAr} ({toArabicNumerals(count)})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Practical Sunnah Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {filteredPropheticSunnahs.map((item, idx) => {
+              const isAppliedToday = sunnahAnalytics.todayAppliedIds.includes(
+                item.id
+              );
+              return (
+                <article
+                  key={item.id}
+                  data-testid={`sunnah-card-${item.id}`}
+                  className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between gap-3.5 transition-colors ${
+                    isAppliedToday
+                      ? 'bg-[#F3FAF5] border-[#14532D]/40'
+                      : 'bg-[#FBF9F5] border-stone-200'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    {/* Unboxed Metadata Line */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
+                        <span className="font-bold text-[#78350F]">
+                          {toArabicNumerals(idx + 1)}. {item.categoryLabelAr}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{item.statusLabelAr}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{item.recommendedTimingAr}</span>
+                      </div>
+                    </div>
+
+                    {/* Sunnah Title */}
+                    <h4 className="font-display text-base font-bold text-stone-900">
+                      {item.titleAr}
+                    </h4>
+
+                    {/* Authentic Hadith & Grading */}
+                    <div className="bg-white border border-stone-200/90 rounded-xl p-3.5 space-y-2">
+                      <p className="font-quran text-base sm:text-lg text-stone-900 leading-relaxed">
+                        {item.hadithArabicText}
+                      </p>
+                      <p className="text-xs font-bold text-[#78350F]">
+                        {item.sourceAndGradingAr}
+                      </p>
+                    </div>
+
+                    {/* Practical Application */}
+                    <div className="space-y-2 text-xs">
+                      <div className="bg-white/80 border border-stone-200/80 rounded-lg p-3 space-y-1">
+                        <span className="font-bold text-[#14532D] block">
+                          كيفية تطبيقها عملياً في اليوم:
+                        </span>
+                        <p className="text-stone-700 leading-relaxed">
+                          {item.practicalHowToAr}
+                        </p>
+                      </div>
+                      <div className="bg-white/80 border border-stone-200/80 rounded-lg p-3 space-y-1">
+                        <span className="font-bold text-[#78350F] block">
+                          ثمرة إحيائها وأجرها:
+                        </span>
+                        <p className="text-stone-700 leading-relaxed">
+                          {item.spiritualRewardAr}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer Actions */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-200/80">
+                    <button
+                      type="button"
+                      data-testid={`apply-sunnah-btn-${item.id}`}
+                      onClick={() => handleToggleSunnahApplied(item.id)}
+                      className={`flex-1 min-h-[40px] py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                        isAppliedToday
+                          ? 'bg-[#14532D] text-white'
+                          : 'bg-white border border-[#14532D] text-[#14532D] hover:bg-[#14532D] hover:text-white'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>
+                        {isAppliedToday ? 'طبّقتها اليوم ✓' : 'طبّقتها اليوم'}
+                      </span>
+                    </button>
+
+                    {onOpenDawahCard && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenDawahCard(sunnahItemToDawahCardPayload(item))
+                        }
+                        className="min-h-[40px] px-3 py-2 rounded-xl bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-[#78350F]" />
+                        <span>بطاقة (PNG)</span>
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       )}

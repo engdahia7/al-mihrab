@@ -763,6 +763,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           hijriDay={hijriDate.day}
           hijriMonthNameAr={hijriDate.monthNameAr}
           onOpenDawahCard={onOpenDawahCard}
+          onOpenMushafPage={onOpenMushafPage}
         />
       )}
 

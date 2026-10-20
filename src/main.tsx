@@ -27,7 +27,7 @@ console.error = (...args: unknown[]) => {
 };
 
 // Clear stale Service Worker precaches on version upgrade or in dev mode so updates apply immediately
-const APP_BUILD_VERSION = 'almihrab-2026-10-20-ruqyah-v4';
+const APP_BUILD_VERSION = 'almihrab-2026-10-20-prophets-istikhara-v6';
 try {
   const prevVersion = localStorage.getItem('almihrab_build_version');
   if (prevVersion !== APP_BUILD_VERSION) {

@@ -24,6 +24,8 @@ import {
 import { toArabicNumerals } from '../data/quranData';
 import { sanitizeQuranicText } from '../utils/astronomy';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
+import { ProphetsStoriesEncyclopedia } from './ProphetsStoriesEncyclopedia';
+import { SpecialPrayersAndIstikharaGuide } from './SpecialPrayersAndIstikharaGuide';
 
 const FAVORITE_DUAS_STORAGE_KEY = 'almihrab_favorite_duas_v1';
 
@@ -38,9 +40,9 @@ export const DuasView: React.FC<DuasViewProps> = ({
   onOpenDawahCard,
   onOpenWaqfModal,
 }) => {
-  // Primary Section Switcher: Authentic Duas | Asma Allah Al-Husna | Thematic Quran Index
+  // Primary Section Switcher: Authentic Duas | Prophets Stories (25) | Istikhara & Special Prayers | Asma Allah Al-Husna | Thematic Quran Index
   const [activeSection, setActiveSection] = useState<
-    'duas' | 'asma_husna' | 'thematic_quran'
+    'duas' | 'prophets_stories' | 'istikhara_guide' | 'asma_husna' | 'thematic_quran'
   >('duas');
 
   const [selectedTopic, setSelectedTopic] = useState<DuaTopicCategoryId>('all');
@@ -174,7 +176,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
-            الأدعية والأسماء الحسنى
+            الأدعية وقصص الأنبياء والأسماء الحسنى
           </h1>
           {onOpenWaqfModal && (
             <button
@@ -202,15 +204,16 @@ export const DuasView: React.FC<DuasViewProps> = ({
         </div>
       </div>
 
-      {/* Top 3-Section Switcher */}
+      {/* Top 5-Section Switcher */}
       <div
         role="tablist"
-        aria-label="أقسام الأدعية والأسماء الحسنى والمفهرس الموضوعي"
-        className="grid grid-cols-3 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
+        aria-label="أقسام الأدعية وقصص الأنبياء والاستخارة والأسماء الحسنى والمفهرس الموضوعي"
+        className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
       >
         <button
           type="button"
           role="tab"
+          data-testid="duas-tab-duas"
           aria-selected={activeSection === 'duas'}
           onClick={() => setActiveSection('duas')}
           className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
@@ -225,6 +228,37 @@ export const DuasView: React.FC<DuasViewProps> = ({
         <button
           type="button"
           role="tab"
+          data-testid="duas-tab-prophets"
+          aria-selected={activeSection === 'prophets_stories'}
+          onClick={() => setActiveSection('prophets_stories')}
+          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
+            activeSection === 'prophets_stories'
+              ? 'bg-[#14532D] text-white shadow-xs'
+              : 'text-stone-700 hover:bg-stone-200/70'
+          }`}
+        >
+          <span>قصص الأنبياء وأدعيتهم (٢٥)</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          data-testid="duas-tab-istikhara"
+          aria-selected={activeSection === 'istikhara_guide'}
+          onClick={() => setActiveSection('istikhara_guide')}
+          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
+            activeSection === 'istikhara_guide'
+              ? 'bg-[#14532D] text-white shadow-xs'
+              : 'text-stone-700 hover:bg-stone-200/70'
+          }`}
+        >
+          <span>مرشد الاستخارة والصلوات</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          data-testid="duas-tab-asma"
           aria-selected={activeSection === 'asma_husna'}
           onClick={() => setActiveSection('asma_husna')}
           className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
@@ -239,6 +273,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
         <button
           type="button"
           role="tab"
+          data-testid="duas-tab-thematic"
           aria-selected={activeSection === 'thematic_quran'}
           onClick={() => setActiveSection('thematic_quran')}
           className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
@@ -250,6 +285,19 @@ export const DuasView: React.FC<DuasViewProps> = ({
           <span>آيات موضوعية</span>
         </button>
       </div>
+
+      {/* SECTION: PROPHETS STORIES & QURANIC DUAS (25 PROPHETS) */}
+      {activeSection === 'prophets_stories' && (
+        <ProphetsStoriesEncyclopedia
+          onOpenMushafPage={onOpenMushafPage}
+          onOpenDawahCard={onOpenDawahCard}
+        />
+      )}
+
+      {/* SECTION: INTERACTIVE ISTIKHARA, TAWBAH & SPECIAL PRAYERS GUIDE */}
+      {activeSection === 'istikhara_guide' && (
+        <SpecialPrayersAndIstikharaGuide onOpenDawahCard={onOpenDawahCard} />
+      )}
 
       {/* =====================================================================
           SECTION 1: AUTHENTIC DUAS

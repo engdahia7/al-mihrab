@@ -13,6 +13,12 @@ import {
   getDailyInspirationPresetForDate,
   presetToDawahCardPayload,
   KHUSHU_RETREAT_GOALS,
+  VERIFIED_PROPHETIC_SUNNAHS,
+  PROPHETIC_SUNNAH_CATEGORIES,
+  toggleSunnahAppliedForDate,
+  getSunnahOfTheDay,
+  calculateSunnahRevivalAnalytics,
+  sunnahItemToDawahCardPayload,
 } from './worshipTrackerAndTools';
 
 test('Worship Tracker, 12 Rawatib & Fasting Analytics: computes 100% completion and a house in Jannah when all 5 fard, 12 rawatib, and 3 nawafil are completed', () => {
@@ -190,4 +196,57 @@ test('Complete Ruqyah, Daily PNG Studio Presets, and Khushu Mode: provides verif
   assert.equal(KHUSHU_RETREAT_GOALS.length, 4);
   assert.ok(KHUSHU_RETREAT_GOALS[0].verseAr.includes('لِّيَدَّبَّرُوا'));
 });
+
+test('Abandoned Sunnahs & Daily Prophetic Etiquette cards, Friday selector, and tracker analytics work accurately', () => {
+  assert.equal(VERIFIED_PROPHETIC_SUNNAHS.length, 12);
+  assert.equal(PROPHETIC_SUNNAH_CATEGORIES.length, 6);
+
+  for (const item of VERIFIED_PROPHETIC_SUNNAHS) {
+    assert.ok(item.hadithArabicText.length > 20);
+    assert.ok(item.sourceAndGradingAr.includes('حديث'));
+    assert.ok(item.practicalHowToAr.length > 15);
+    assert.ok(item.spiritualRewardAr.length > 15);
+  }
+
+  // Friday (2026-10-23) returns a Friday Sunnah
+  const fridayDate = new Date(2026, 9, 23);
+  const fridaySunnah = getSunnahOfTheDay(fridayDate);
+  assert.equal(fridaySunnah.category, 'friday_prayer');
+
+  let tracker = { appliedByDate: {} };
+  tracker = toggleSunnahAppliedForDate(
+    tracker,
+    '2026-10-20',
+    'sunnah-wudu-two-rakaat'
+  );
+  tracker = toggleSunnahAppliedForDate(
+    tracker,
+    '2026-10-20',
+    'sunnah-enter-home-dhikr'
+  );
+  tracker = toggleSunnahAppliedForDate(
+    tracker,
+    '2026-10-19',
+    'sunnah-wudu-two-rakaat'
+  );
+
+  const analytics = calculateSunnahRevivalAnalytics(tracker, '2026-10-20');
+  assert.equal(analytics.todayAppliedCount, 2);
+  assert.equal(analytics.totalAppliedAllTime, 3);
+  assert.equal(analytics.uniqueSunnahsRevivedCount, 2);
+  assert.equal(analytics.activeDaysCount, 2);
+
+  tracker = toggleSunnahAppliedForDate(
+    tracker,
+    '2026-10-20',
+    'sunnah-enter-home-dhikr'
+  );
+  const afterToggle = calculateSunnahRevivalAnalytics(tracker, '2026-10-20');
+  assert.equal(afterToggle.todayAppliedCount, 1);
+
+  const cardPayload = sunnahItemToDawahCardPayload(VERIFIED_PROPHETIC_SUNNAHS[0]);
+  assert.ok(cardPayload.headerBadgeAr.includes('سُنّة اليوم'));
+  assert.ok(cardPayload.explanationOrVirtueAr?.includes('التطبيق العملي'));
+});
+
 

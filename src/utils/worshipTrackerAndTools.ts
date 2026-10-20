@@ -1199,3 +1199,345 @@ export function saveKhushuStats(stats: KhushuStatsRecord): void {
     // ignore
   }
 }
+
+// ============================================================================
+// 6. ABANDONED SUNNAHS & DAILY PROPHETIC ETIQUETTE (السنن المهجورة والآداب النبوية)
+// ============================================================================
+
+export type PropheticSunnahCategoryId =
+  | 'all'
+  | 'fitrah_purification'
+  | 'food_drink'
+  | 'clothing_sleep'
+  | 'home_mosque'
+  | 'friday_prayer';
+
+export interface PropheticSunnahCategoryMeta {
+  id: PropheticSunnahCategoryId;
+  labelAr: string;
+}
+
+export const PROPHETIC_SUNNAH_CATEGORIES: PropheticSunnahCategoryMeta[] = [
+  { id: 'all', labelAr: 'كل السنن والآداب' },
+  { id: 'fitrah_purification', labelAr: 'سنن الفطرة والطهارة' },
+  { id: 'food_drink', labelAr: 'سنن الطعام والشراب' },
+  { id: 'clothing_sleep', labelAr: 'سنن اللباس والنوم' },
+  { id: 'home_mosque', labelAr: 'سنن دخول المنزل والمسجد' },
+  { id: 'friday_prayer', labelAr: 'سنن يوم الجمعة والصلاة' },
+];
+
+export interface PropheticSunnahItem {
+  id: string;
+  category: Exclude<PropheticSunnahCategoryId, 'all'>;
+  categoryLabelAr: string;
+  titleAr: string;
+  statusLabelAr: string;
+  hadithArabicText: string;
+  sourceAndGradingAr: string;
+  practicalHowToAr: string;
+  spiritualRewardAr: string;
+  recommendedTimingAr: string;
+}
+
+export const VERIFIED_PROPHETIC_SUNNAHS: PropheticSunnahItem[] = [
+  {
+    id: 'sunnah-wudu-two-rakaat',
+    category: 'fitrah_purification',
+    categoryLabelAr: 'سنن الفطرة والطهارة',
+    titleAr: 'صلاة ركعتين خفيفتين عقب الوضوء (سُنّة بلال رضي الله عنه)',
+    statusLabelAr: 'سُنّة مؤكدة يغفل عنها الكثير',
+    hadithArabicText:
+      'قَالَ النَّبِيُّ ﷺ لِبِلَالٍ عِنْدَ صَلَاةِ الْفَجْرِ: «يَا بِلَالُ حَدِّثْنِي بِأَرْجَى عَمَلٍ عَمِلْتَهُ فِي الْإِسْلَامِ، فَإِنِّي سَمِعْتُ دَفَّ نَعْلَيْكَ بَيْنَ يَدَيَّ فِي الْجَنَّةِ»، قَالَ: «مَا عَمِلْتُ عَمَلًا أَرْجَى عِنْدِي أَنِّي لَمْ أَتَطَهَّرْ طُهُورًا فِي سَاعَةِ لَيْلٍ أَوْ نَهَارٍ إِلَّا صَلَّيْتُ بِذَلِكَ الطُّهُورِ مَا كُتِبَ لِي أَنْ أُصَلِّيَ».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (١١٤٩) وصحيح مسلم (٢٤٥٨) · حديث صحيح',
+    practicalHowToAr:
+      'بعد فراغك من الوضوء في أي وقت من ليل أو نهار، بادر بصلاة ركعتين خفيفتين بنية سُنّة الوضوء، وأقبِل بقلبك فيهما ولا تحدّث نفسك بشيء من أمور الدنيا.',
+    spiritualRewardAr:
+      'مغفرة ما تقدّم من الذنوب، وسببٌ لمرافقة النبي ﷺ وسماع وقع الخطى في الجنة.',
+    recommendedTimingAr: 'عقب الوضوء في الليل أو النهار',
+  },
+  {
+    id: 'sunnah-siwak-prayer',
+    category: 'fitrah_purification',
+    categoryLabelAr: 'سنن الفطرة والطهارة',
+    titleAr: 'السواك عند الاستيقاظ وعند الوضوء وعند كل صلاة',
+    statusLabelAr: 'من سنن الفطرة اليومية',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «لَوْلَا أَنْ أَشُقَّ عَلَى أُمَّتِي لَأَمَرْتُهُمْ بِالسِّوَاكِ عِنْدَ كُلِّ صَلَاةٍ» وَفِي رِوَايَةٍ: «مَعَ كُلِّ وُضُوءٍ».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (٨٨٧) وصحيح مسلم (٢٥٢) · حديث صحيح',
+    practicalHowToAr:
+      'احتفظ بسواكٍ نظيف في جيبك أو بجوار مصلاك، واستعمله عند الاستيقاظ من النوم، وعند المضمضة في الوضوء، وقبل تكبيرة الإحرام وعند قراءة القرآن.',
+    spiritualRewardAr:
+      'مطهرةٌ للفم ومرضاةٌ للرب سبحانه، وإحياءٌ لسنة واظب عليها النبي ﷺ حتى في آخر لحظات حياته.',
+    recommendedTimingAr: 'عند كل وضوء وصلاة وعند الانتباه من النوم',
+  },
+  {
+    id: 'sunnah-enter-home-dhikr',
+    category: 'home_mosque',
+    categoryLabelAr: 'سنن دخول المنزل والمسجد',
+    titleAr: 'ذكر الله عند دخول المنزل والسلام على أهله',
+    statusLabelAr: 'سُنّة يومية لحفظ البيت والبركة',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «إِذَا دَخَلَ الرَّجُلُ بَيْتَهُ فَذَكَرَ اللَّهَ عِنْدَ دُخُولِهِ وَعِنْدَ طَعَامِهِ، قَالَ الشَّيْطَانُ: لَا مَبِيتَ لَكُمْ وَلَا عَشَاءَ».',
+    sourceAndGradingAr: 'رواه مسلم في صحيحه (٢٠١٨) عن جابر بن عبد الله · حديث صحيح',
+    practicalHowToAr:
+      'عند فتح باب المنزل ادخل برجلك اليمنى وقل: «بسم الله ولجنا، وبسم الله خرجنا، وعلى الله ربنا توكلنا» ثم سلّم على أهلك بتحية الإسلام (السلام عليكم ورحمة الله).',
+    spiritualRewardAr:
+      'تحصين البيت من مبيت الشياطين، وحلول البركة والسكينة والألفة بين أهل المنزل.',
+    recommendedTimingAr: 'عند كل دخول إلى المنزل',
+  },
+  {
+    id: 'sunnah-mosque-steps-right-left',
+    category: 'home_mosque',
+    categoryLabelAr: 'سنن دخول المنزل والمسجد',
+    titleAr: 'التيامن عند دخول المسجد والتياسر عند الخروج مع الدعاء المأثور',
+    statusLabelAr: 'سُنّة مهجورة في الدخول والخروج',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «إِذَا دَخَلَ أَحَدُكُمُ الْمَسْجِدَ فَلْيَقُلِ: اللَّهُمَّ افْتَحْ لِي أَبْوَابَ رَحْمَتِكَ، وَإِذَا خَرَجَ فَلْيَقُلِ: اللَّهُمَّ إِنِّي أَسْأَلُكَ مِنْ فَضْلِكَ».',
+    sourceAndGradingAr: 'رواه مسلم في صحيحه (٧١٣) وعن أنس في البخاري معلّقاً · حديث صحيح',
+    practicalHowToAr:
+      'قدّم رجلك اليمنى عند دخول المسجد وصلِّ على النبي ﷺ وسل الله رحمته، وعند الخروج قدّم رجلك اليسرى وسل الله من فضله ورزقه الحلال.',
+    spiritualRewardAr:
+      'نيل رحمة الله في المسجد، والظفر بفضله وتوفيقه في طلب المعاش بعد الخروج.',
+    recommendedTimingAr: 'مع الصلوات الخمس عند دخول المسجد والخروج منه',
+  },
+  {
+    id: 'sunnah-drink-three-breaths',
+    category: 'food_drink',
+    categoryLabelAr: 'سنن الطعام والشراب',
+    titleAr: 'الشرب جالساً على ثلاث دفعات مع التنفّس خارج الإناء',
+    statusLabelAr: 'أدب نبوي صحي ومبارك',
+    hadithArabicText:
+      'عَنْ أَنَسٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: «كَانَ رَسُولُ اللَّهِ ﷺ يَتَنَفَّسُ فِي الشَّرَابِ ثَلَاثًا، وَيَقُولُ: إِنَّهُ أَرْوَى وَأَبْرَأُ وَأَمْرَأُ».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (٥٦٣١) وصحيح مسلم (٢٠٢٨) · حديث صحيح',
+    practicalHowToAr:
+      'اشرب باليد اليمنى وأنت جالس، وسمِّ الله في أوله، واشرب على ثلاث رشفات تفصل بينها بالتنفس خارج الكوب، واحمد الله عند الفراغ.',
+    spiritualRewardAr:
+      'أروى للعطش، وأبرأ من الأذى، وأهنأ للمعدة، مع نيل أجر الاقتداء بهدي النبي ﷺ في كل شربة ماء.',
+    recommendedTimingAr: 'عند شرب الماء وسائر المشروبات طوال اليوم',
+  },
+  {
+    id: 'sunnah-food-lick-fingers-praise',
+    category: 'food_drink',
+    categoryLabelAr: 'سنن الطعام والشراب',
+    titleAr: 'إماطة الأذى عن اللقمة الساقطة وحفظ النعمة وحمد الله بعد الطعام',
+    statusLabelAr: 'سُنّة مهجورة لحفظ البركة',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «إِنَّكُمْ لَا تَدْرُونَ فِي أَيِّ طَعَامِكُمُ الْبَرَكَةُ» وَقَالَ: «مَنْ أَكَلَ طَعَامًا فَقَالَ: الْحَمْدُ لِلَّهِ الَّذِي أَطْعَمَنِي هَذَا وَرَزَقَنِيهِ مِنْ غَيْرِ حَوْلٍ مِنِّي وَلَا قُوَّةٍ، غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ».',
+    sourceAndGradingAr: 'رواه مسلم (٢٠٣٣) وأبو داود والترمذي (٣٤٥٨) وحسّنه · حديث صحيح',
+    practicalHowToAr:
+      'كُلْ بيمينك مما يليك، ولا تترك بقية الطعام في الصحن تُرمى بل استوفِ النعمة، ثم قل دعاء الحمد المأثور عقب الفراغ مباشرة.',
+    spiritualRewardAr:
+      'إدراك بركة الطعام الخفية، ومغفرة ما تقدّم من الذنوب بدعاءٍ يسير بعد كل وجبة.',
+    recommendedTimingAr: 'عند كل وجبة طعام في اليوم',
+  },
+  {
+    id: 'sunnah-shoes-clothing-right-left',
+    category: 'clothing_sleep',
+    categoryLabelAr: 'سنن اللباس والنوم',
+    titleAr: 'البدء باليمين عند لبس الثوب والنعل والبدء بالشمال عند الخلع',
+    statusLabelAr: 'سُنّة مهجورة تتكرر كل يوم',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «إِذَا انْتَعَلَ أَحَدُكُمْ فَلْيَبْدَأْ بِالْيَمِينِ، وَإِذَا نَزَعَ فَلْيَبْدَأْ بِالشِّمَالِ، لِتَكُنِ الْيُمْنَى أَوَّلَهُمَا تُنْعَلُ وَآخِرَهُمَا تُنْزَعُ».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (٥٨٥٥) وصحيح مسلم (٢٠٩٧) · حديث صحيح',
+    practicalHowToAr:
+      'استحضر النية عند ارتداء ملابسك أو حذائك؛ فأدخل اليد اليمنى أو القدم اليمنى أولاً مع التسمية، وعند الخلع أخرج اليسرى أولاً ثم اليمنى.',
+    spiritualRewardAr:
+      'تحويل العادات اليومية المتكررة (اللبس والانتعال) إلى عبادات تُؤجر عليها وتُحيي بها سنة نبيك ﷺ.',
+    recommendedTimingAr: 'عند ارتداء الملابس أو الحذاء وخلعهما يومياً',
+  },
+  {
+    id: 'sunnah-dust-bed-sleep-right',
+    category: 'clothing_sleep',
+    categoryLabelAr: 'سنن اللباس والنوم',
+    titleAr: 'النوم على طهارة ونفض الفراش ثلاثاً والاضطجاع على الشق الأيمن',
+    statusLabelAr: 'سُنّة نبوية قبل النوم',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «إِذَا أَوَى أَحَدُكُمْ إِلَى فِرَاشِهِ فَلْيَنْفُضْ فِرَاشَهُ بِدَاخِلَةِ إِزَارِهِ، فَإِنَّهُ لَا يَدْرِي مَا خَلَفَهُ عَلَيْهِ، ثُمَّ يَقُولُ: بِاسْمِكَ رَبِّي وَضَعْتُ جَنْبِي وَبِكَ أَرْفَعُهُ...».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (٦٣٢٠) وصحيح مسلم (٢٧١٤) · حديث صحيح',
+    practicalHowToAr:
+      'توضأ وضوءك للصلاة قبل النوم، وانفض فراشك بطرف ثوبك أو يدك ثلاث مرات مع التسمية، ثم اضطجع على شقك الأيمن وقل أذكار النوم.',
+    spiritualRewardAr:
+      'يبيت معك مَلَكٌ يستغفر لك كلما تقلّبت في ليلك، وتُكتب في عداد الذاكرين حتى تستيقظ.',
+    recommendedTimingAr: 'كل ليلة عند الإيواء إلى الفراش',
+  },
+  {
+    id: 'sunnah-friday-early-ghusl',
+    category: 'friday_prayer',
+    categoryLabelAr: 'سنن يوم الجمعة والصلاة',
+    titleAr: 'الاغتسال والتطيب والتبكير ماشياً إلى صلاة الجمعة',
+    statusLabelAr: 'أعظم سنن يوم الجمعة',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «مَنْ غَسَّلَ يَوْمَ الْجُمُعَةِ وَاغْتَسَلَ، ثُمَّ بَكَّرَ وَابْتَكَرَ، وَمَشَى وَلَمْ يَرْكَبْ، وَدَنَا مِنَ الْإِمَامِ فَاسْتَمَعَ وَلَمْ يَلْغُ، كَانَ لَهُ بِكُلِّ خُطْوَةٍ عَمَلُ سَنَةٍ أَجْرُ صِيَامِهَا وَقِيَامِهَا».',
+    sourceAndGradingAr: 'رواه أبو داود (٣٤٥) والترمذي (٤٩٦) وصححه الألباني وابن خزيمة · حديث صحيح',
+    practicalHowToAr:
+      'اغتسل غسل الجمعة، وتطيّب، والبس أحسن ثيابك، واخرج مبكراً إلى المسجد ماشياً على قدميك، واقترب من الإمام وأنصت للخطبة.',
+    spiritualRewardAr:
+      'أجرٌ عظيم لا نظير له: بكل خطوةٍ إلى المسجد ثوابُ سنةٍ كاملة صيامها وقيامها.',
+    recommendedTimingAr: 'صباح يوم الجمعة وقبل النداء',
+  },
+  {
+    id: 'sunnah-friday-last-hour-dua',
+    category: 'friday_prayer',
+    categoryLabelAr: 'سنن يوم الجمعة والصلاة',
+    titleAr: 'التفرغ للدعاء في آخر ساعة بعد العصر قبل غروب شمس الجمعة',
+    statusLabelAr: 'سُنّة ساعة الإجابة المرجوّة',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «يَوْمُ الْجُمُعَةِ اثْنَتَا عَشْرَةَ سَاعَةً، لَا يُوجَدُ فِيهَا عَبْدٌ مُسْلِمٌ يَسْأَلُ اللَّهَ شَيْئًا إِلَّا آتَاهُ إِيَّاهُ، فَالْتَمِسُوهَا آخِرَ سَاعَةٍ بَعْدَ الْعَصْرِ».',
+    sourceAndGradingAr: 'رواه أبو داود (١٠٤٨) والنسائي (١٣٨٩) وصححه النووي والألباني · حديث صحيح',
+    practicalHowToAr:
+      'فرّغ نفسك في الساعة الأخيرة قبل أذان المغرب يوم الجمعة (في المسجد أو في مصلى بيتك) وألحّ على الله بجوامع الدعاء لنفسك ووالديك وللمسلمين.',
+    spiritualRewardAr:
+      'موافقة ساعة الإجابة التي لا يسأل العبدُ المسلمُ فيها ربَّه خيراً إلا أعطاه إياه.',
+    recommendedTimingAr: 'آخر ساعة بعد صلاة العصر يوم الجمعة',
+  },
+  {
+    id: 'sunnah-fajr-sunrise-ishraq',
+    category: 'friday_prayer',
+    categoryLabelAr: 'سنن يوم الجمعة والصلاة',
+    titleAr: 'المكث في المصلى لذكر الله بعد الفجر حتى تطلع الشمس وصلاة ركعتين',
+    statusLabelAr: 'سُنّة حجة وعمرة تامّتين',
+    hadithArabicText:
+      'قَالَ رَسُولُ اللَّهِ ﷺ: «مَنْ صَلَّى الْغَدَاةَ فِي جَمَاعَةٍ، ثُمَّ قَعَدَ يَذْكُرُ اللَّهَ حَتَّى تَطْلُعَ الشَّمْسُ، ثُمَّ صَلَّى رَكْعَتَيْنِ، كَانَتْ لَهُ كَأَجْرِ حَجَّةٍ وَعُمْرَةٍ، تَامَّةٍ تَامَّةٍ تَامَّةٍ».',
+    sourceAndGradingAr: 'رواه الترمذي (٥٨٦) وحسّنه الألباني بشواهده · حديث حسن',
+    practicalHowToAr:
+      'بعد صلاة الفجر، امكث في مصلاك لأذكار الصباح وتلاوة القرآن حتى يمضي نحو ١٥ دقيقة بعد شروق الشمس، ثم صلِّ ركعتي الإشراق (أول الضحى).',
+    spiritualRewardAr:
+      'نيل ثوابٍ كأجر حجة وعمرة تامّتين في ميزان الحسنات، وانشراح الصدر من أول النهار.',
+    recommendedTimingAr: 'من بعد صلاة الفجر حتى ارتفاع الشمس قيد رمح',
+  },
+  {
+    id: 'sunnah-salam-known-unknown',
+    category: 'home_mosque',
+    categoryLabelAr: 'سنن دخول المنزل والمسجد',
+    titleAr: 'إفشاء السلام على من عرفت ومن لم تعرف بابتسامةٍ وطلاقة وجه',
+    statusLabelAr: 'من خير الإسلام ومفاتيح الجنة',
+    hadithArabicText:
+      'أَنَّ رَجُلًا سَأَلَ النَّبِيَّ ﷺ: أَيُّ الْإِسْلَامِ خَيْرٌ؟ قَالَ: «تُطْعِمُ الطَّعَامَ، وَتَقْرَأُ السَّلَامَ عَلَى مَنْ عَرَفْتَ وَمَنْ لَمْ تَعْرِفْ».',
+    sourceAndGradingAr: 'متفق عليه — صحيح البخاري (١٢) وصحيح مسلم (٣٩) · حديث صحيح',
+    practicalHowToAr:
+      'ابدأ من تلقاه في طريقك أو مسجدك أو عملك بتحية الإسلام كاملة: «السلام عليكم ورحمة الله وبركاته» بوجهٍ طلقٍ مبتسم، لا سيما من لا تعرفهم.',
+    spiritualRewardAr:
+      'ثلاثون حسنة بكل سلامٍ كامل، ونشر المحبة بين المؤمنين التي هي سبب دخول الجنة.',
+    recommendedTimingAr: 'عند الخروج للناس وفي الطريق والمسجد والعمل',
+  },
+];
+
+export interface PropheticSunnahTrackerState {
+  /** Map of ISO date (YYYY-MM-DD) -> array of applied PropheticSunnahItem IDs */
+  appliedByDate: Record<string, string[]>;
+}
+
+export const PROPHETIC_SUNNAH_STORAGE_KEY = 'almihrab_prophetic_sunnah_tracker_v1';
+
+export function loadSunnahTrackerState(): PropheticSunnahTrackerState {
+  if (typeof window === 'undefined') {
+    return { appliedByDate: {} };
+  }
+  try {
+    const raw = localStorage.getItem(PROPHETIC_SUNNAH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.appliedByDate === 'object') {
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { appliedByDate: {} };
+}
+
+export function saveSunnahTrackerState(state: PropheticSunnahTrackerState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PROPHETIC_SUNNAH_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
+export function toggleSunnahAppliedForDate(
+  state: PropheticSunnahTrackerState,
+  dateISO: string,
+  sunnahId: string
+): PropheticSunnahTrackerState {
+  const existing = state.appliedByDate[dateISO] || [];
+  const exists = existing.includes(sunnahId);
+  const nextList = exists
+    ? existing.filter((id) => id !== sunnahId)
+    : [...existing, sunnahId];
+  return {
+    appliedByDate: {
+      ...state.appliedByDate,
+      [dateISO]: nextList,
+    },
+  };
+}
+
+/**
+ * Deterministically picks the featured "Sunnah of the Day" (سُنّة اليوم).
+ * On Fridays (getDay() === 5), highlights one of the Friday Sunnahs.
+ */
+export function getSunnahOfTheDay(date: Date = new Date()): PropheticSunnahItem {
+  const dayOfYear = Math.floor(
+    (date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  if (date.getDay() === 5) {
+    const fridayItems = VERIFIED_PROPHETIC_SUNNAHS.filter(
+      (item) => item.category === 'friday_prayer'
+    );
+    if (fridayItems.length > 0) {
+      return fridayItems[Math.abs(dayOfYear) % fridayItems.length];
+    }
+  }
+  const idx = Math.abs(dayOfYear) % VERIFIED_PROPHETIC_SUNNAHS.length;
+  return VERIFIED_PROPHETIC_SUNNAHS[idx];
+}
+
+export interface SunnahRevivalAnalytics {
+  todayAppliedIds: string[];
+  todayAppliedCount: number;
+  totalAppliedAllTime: number;
+  uniqueSunnahsRevivedCount: number;
+  activeDaysCount: number;
+}
+
+export function calculateSunnahRevivalAnalytics(
+  state: PropheticSunnahTrackerState,
+  todayISO: string
+): SunnahRevivalAnalytics {
+  const todayAppliedIds = state.appliedByDate[todayISO] || [];
+  let totalAppliedAllTime = 0;
+  let activeDaysCount = 0;
+  const uniqueSet = new Set<string>();
+
+  for (const ids of Object.values(state.appliedByDate)) {
+    if (Array.isArray(ids) && ids.length > 0) {
+      activeDaysCount += 1;
+      totalAppliedAllTime += ids.length;
+      ids.forEach((id) => uniqueSet.add(id));
+    }
+  }
+
+  return {
+    todayAppliedIds,
+    todayAppliedCount: todayAppliedIds.length,
+    totalAppliedAllTime,
+    uniqueSunnahsRevivedCount: uniqueSet.size,
+    activeDaysCount,
+  };
+}
+
+export function sunnahItemToDawahCardPayload(
+  item: PropheticSunnahItem
+): DawahShareCardPayload {
+  return {
+    category: 'dhikr',
+    headerBadgeAr: `سُنّة اليوم وإحياء الهدي النبوي · ${item.categoryLabelAr}`,
+    titleAr: item.titleAr,
+    mainArabicText: item.hadithArabicText,
+    explanationOrVirtueAr: `التطبيق العملي: ${item.practicalHowToAr} — الثمرة: ${item.spiritualRewardAr}`,
+    sourceAndGradingAr: item.sourceAndGradingAr,
+  };
+}
+
