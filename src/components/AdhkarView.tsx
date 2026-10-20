@@ -9,6 +9,7 @@ import {
   Volume2,
   VolumeX,
   Smartphone,
+  Play,
   Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -34,6 +35,7 @@ import {
   playAlertSoundTone,
   stopActiveAdhanAudio,
 } from '../utils/soundPlayer';
+import { RuqyahAndSleepAudioPanel } from './RuqyahAndSleepAudioPanel';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const ADHKAR_PROGRESS_KEY = 'almihrab_adhkar_progress_v1';
@@ -52,6 +54,7 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] =
     useState<AdhkarCategoryId>('morning');
+  const [ruqyahAutoStartSignal, setRuqyahAutoStartSignal] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [mobileFocusMode, setMobileFocusMode] = useState<'adhkar' | 'masbaha'>(
     'adhkar'
@@ -344,9 +347,24 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
     <div className="space-y-5 sm:space-y-7">
       {/* Header & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
-          الأذكار والمسبحة
-        </h1>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
+            الأذكار والمسبحة
+          </h1>
+          <button
+            type="button"
+            data-testid="quick-play-full-ruqyah-once-btn"
+            onClick={() => {
+              setActiveCategory('ruqyah');
+              setMobileFocusMode('adhkar');
+              setRuqyahAutoStartSignal((s) => s + 1);
+            }}
+            className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] hover:bg-[#14532D]/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>تشغيل الرقية كاملة مرة واحدة</span>
+          </button>
+        </div>
 
         {/* Search Input */}
         <div className="relative w-full sm:w-72">
@@ -528,155 +546,174 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
               : 'block order-1'
           } lg:col-span-8 space-y-3.5`}
         >
-          {/* Compact Single-Row Category Progress Bar */}
-          <div className="bg-white border border-stone-200 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <h2 className="font-display text-base sm:text-lg font-bold text-stone-900">
-                {currentCategorySpec.nameAr}
-              </h2>
-              <span
-                className="text-xs font-semibold text-[#14532D] font-tabular"
-                data-testid="adhkar-category-progress"
-              >
-                · أُنجز {categoryStats.completedItems} من {categoryStats.totalItems} ({categoryStats.percent}%)
-              </span>
-            </div>
+          {activeCategory === 'ruqyah' ? (
+            <RuqyahAndSleepAudioPanel
+              onOpenDawahCard={onOpenDawahCard}
+              autoStartFullOnceSignal={ruqyahAutoStartSignal}
+            />
+          ) : (
+            <>
+              {/* Compact Single-Row Category Progress Bar */}
+              <div className="bg-white border border-stone-200 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 className="font-display text-base sm:text-lg font-bold text-stone-900">
+                    {currentCategorySpec.nameAr}
+                  </h2>
+                  <span
+                    className="text-xs font-semibold text-[#14532D] font-tabular"
+                    data-testid="adhkar-category-progress"
+                  >
+                    · أُنجز {categoryStats.completedItems} من {categoryStats.totalItems} ({categoryStats.percent}%)
+                  </span>
+                </div>
 
-            <div className="flex items-center gap-3 flex-1 sm:flex-initial justify-end">
-              <div className="w-24 sm:w-32 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#14532D] transition-transform duration-200 origin-right"
-                  style={{ transform: `scaleX(${categoryStats.percent / 100})` }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleResetCategory}
-                className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-stone-700 bg-[#F7F4EE] hover:bg-stone-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>تصفير</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Adhkar Cards */}
-          <div className="space-y-3.5">
-            {categoryItems.map((item, idx) => {
-              const currentCount = counts[item.id] || 0;
-              const isDone = currentCount >= item.targetCount;
-              const remaining = Math.max(0, item.targetCount - currentCount);
-
-              return (
-                <article
-                  key={item.id}
-                  data-testid={`dhikr-card-${item.id}`}
-                  className={`rounded-2xl p-4 sm:p-5 border transition-colors space-y-3.5 ${
-                    isDone
-                      ? 'bg-[#14532D]/5 border-[#14532D]/40'
-                      : 'bg-white border-stone-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm sm:text-base font-bold text-stone-900">
-                        {toArabicNumerals(idx + 1)}. {item.titleAr}
-                      </h3>
-                      <span className="text-xs text-stone-500">
-                        · {item.sourceAr} ({item.gradingAr})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {currentCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => handleResetDhikr(item.id)}
-                          aria-label={`إعادة ضبط عداد ${item.titleAr}`}
-                          className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 cursor-pointer"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {onOpenDawahCard && (
-                        <button
-                          type="button"
-                          data-testid={`dhikr-share-card-btn-${item.id}`}
-                          onClick={() =>
-                            onOpenDawahCard({
-                              category: 'dhikr',
-                              headerBadgeAr: `${currentCategorySpec.nameAr} · حصن المسلم`,
-                              titleAr: item.titleAr,
-                              mainArabicText: item.arabicText,
-                              explanationOrVirtueAr: item.virtueAr,
-                              sourceAndGradingAr: `${item.sourceAr} (${item.gradingAr}) · التكرار: ${toArabicNumerals(item.targetCount)}`,
-                            })
-                          }
-                          aria-label={`تصميم بطاقة دعوية لذكر ${item.titleAr}`}
-                          className="min-h-[30px] px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#14532D]/15 bg-[#14532D]/8 border border-[#14532D]/20 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span>بطاقة دعوية</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyDhikr(item)}
-                        aria-label={`نسخ ذكر ${item.titleAr}`}
-                        className="min-h-[30px] px-2.5 py-1 text-xs text-stone-600 hover:text-stone-900 bg-[#F7F4EE] rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
-                      >
-                        {copiedId === item.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-700" />
-                            <span>نُسخ</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>نسخ</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="font-quran text-xl sm:text-2xl text-stone-900 leading-[2.15] text-right">
-                    {sanitizeQuranicText(item.arabicText)}
-                  </p>
-
-                  <div className="pt-3 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <span className="text-xs text-stone-600">{item.virtueAr}</span>
-
+                <div className="flex items-center gap-2.5 flex-1 sm:flex-initial justify-end">
+                  {(activeCategory === 'sleep' || activeCategory === 'waking') && (
                     <button
                       type="button"
-                      onClick={() => handleIncrementDhikr(item)}
-                      disabled={isDone}
-                      data-testid={`dhikr-btn-${item.id}`}
-                      className={`min-h-[42px] py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-between sm:justify-center gap-3 transition-colors cursor-pointer shrink-0 ${
+                      onClick={() => setActiveCategory('ruqyah')}
+                      className="min-h-[32px] px-2.5 py-1 text-xs font-bold text-[#14532D] bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/25 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span>الرقية وأذكار النوم بالصوت</span>
+                    </button>
+                  )}
+                  <div className="w-20 sm:w-28 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#14532D] transition-transform duration-200 origin-right"
+                      style={{ transform: `scaleX(${categoryStats.percent / 100})` }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetCategory}
+                    className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-stone-700 bg-[#F7F4EE] hover:bg-stone-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>تصفير</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Adhkar Cards */}
+              <div className="space-y-3.5">
+                {categoryItems.map((item, idx) => {
+                  const currentCount = counts[item.id] || 0;
+                  const isDone = currentCount >= item.targetCount;
+                  const remaining = Math.max(0, item.targetCount - currentCount);
+
+                  return (
+                    <article
+                      key={item.id}
+                      data-testid={`dhikr-card-${item.id}`}
+                      className={`rounded-2xl p-4 sm:p-5 border transition-colors space-y-3.5 ${
                         isDone
-                          ? 'bg-[#14532D] text-white'
-                          : 'bg-[#F7F4EE] hover:bg-[#EBE6DF] active:scale-[0.99] text-stone-900 border border-stone-300'
+                          ? 'bg-[#14532D]/5 border-[#14532D]/40'
+                          : 'bg-white border-stone-200'
                       }`}
                     >
-                      <span className="flex items-center gap-1.5">
-                        {isDone ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 shrink-0" />
-                            <span>اكتمل</span>
-                          </>
-                        ) : (
-                          <span>اضغط للعدّ (المتبقي {toArabicNumerals(remaining)})</span>
-                        )}
-                      </span>
-                      <span className="font-tabular text-sm font-bold">
-                        {currentCount} / {item.targetCount}
-                      </span>
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm sm:text-base font-bold text-stone-900">
+                            {toArabicNumerals(idx + 1)}. {item.titleAr}
+                          </h3>
+                          <span className="text-xs text-stone-500">
+                            · {item.sourceAr} ({item.gradingAr})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {currentCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetDhikr(item.id)}
+                              aria-label={`إعادة ضبط عداد ${item.titleAr}`}
+                              className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onOpenDawahCard && (
+                            <button
+                              type="button"
+                              data-testid={`dhikr-share-card-btn-${item.id}`}
+                              onClick={() =>
+                                onOpenDawahCard({
+                                  category: 'dhikr',
+                                  headerBadgeAr: `${currentCategorySpec.nameAr} · حصن المسلم`,
+                                  titleAr: item.titleAr,
+                                  mainArabicText: item.arabicText,
+                                  explanationOrVirtueAr: item.virtueAr,
+                                  sourceAndGradingAr: `${item.sourceAr} (${item.gradingAr}) · التكرار: ${toArabicNumerals(item.targetCount)}`,
+                                })
+                              }
+                              aria-label={`تصميم بطاقة دعوية لذكر ${item.titleAr}`}
+                              className="min-h-[30px] px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#14532D]/15 bg-[#14532D]/8 border border-[#14532D]/20 rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>بطاقة دعوية</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyDhikr(item)}
+                            aria-label={`نسخ ذكر ${item.titleAr}`}
+                            className="min-h-[30px] px-2.5 py-1 text-xs text-stone-600 hover:text-stone-900 bg-[#F7F4EE] rounded-lg flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            {copiedId === item.id ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>نُسخ</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>نسخ</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="font-quran text-xl sm:text-2xl text-stone-900 leading-[2.15] text-right">
+                        {sanitizeQuranicText(item.arabicText)}
+                      </p>
+
+                      <div className="pt-3 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-xs text-stone-600">{item.virtueAr}</span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleIncrementDhikr(item)}
+                          disabled={isDone}
+                          data-testid={`dhikr-btn-${item.id}`}
+                          className={`min-h-[42px] py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-between sm:justify-center gap-3 transition-colors cursor-pointer shrink-0 ${
+                            isDone
+                              ? 'bg-[#14532D] text-white'
+                              : 'bg-[#F7F4EE] hover:bg-[#EBE6DF] active:scale-[0.99] text-stone-900 border border-stone-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {isDone ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                <span>اكتمل</span>
+                              </>
+                            ) : (
+                              <span>اضغط للعدّ (المتبقي {toArabicNumerals(remaining)})</span>
+                            )}
+                          </span>
+                          <span className="font-tabular text-sm font-bold">
+                            {currentCount} / {item.targetCount}
+                          </span>
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right 4 Cols: Upgraded Interactive Mihrab Electronic Masbaha */}

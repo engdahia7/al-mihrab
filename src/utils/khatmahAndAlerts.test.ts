@@ -17,6 +17,10 @@ import {
   evaluateScheduledNotificationsForMinute,
   getDefaultPushChannelsConfig,
   buildTestPushNotification,
+  setAllPushChannelsState,
+  countEnabledPushChannels,
+  areAllPushChannelsEnabled,
+  buildChannelSpecificNotification,
 } from './notificationDispatcher.ts';
 
 test('calculateKhatmahStats computes accurate progress, Juz, and daily target pages for 30-day and 15-day plans', () => {
@@ -198,6 +202,33 @@ test('evaluateScheduledNotificationsForMinute dispatches Adhan, Pre-Adhan, Morni
   assert.equal(testNotif.category, 'TEST');
   assert.ok(testNotif.titleAr.includes('العصر'));
 });
+
+test('setAllPushChannelsState and buildChannelSpecificNotification handle bulk toggles and all 6 notification types', () => {
+  const allOff = setAllPushChannelsState(false);
+  assert.equal(countEnabledPushChannels(allOff), 0);
+  assert.equal(areAllPushChannelsEnabled(allOff), false);
+
+  const allOn = setAllPushChannelsState(true);
+  assert.equal(countEnabledPushChannels(allOn), 6);
+  assert.equal(areAllPushChannelsEnabled(allOn), true);
+
+  const adhanNotif = buildChannelSpecificNotification('adhanPush', {
+    cityNameAr: 'مكة المكرمة',
+    nextPrayerNameAr: 'المغرب',
+    nextPrayerTime: '17:58',
+  });
+  assert.equal(adhanNotif.category, 'ADHAN');
+  assert.equal(adhanNotif.shouldPlayFullAdhan, true);
+
+  const kahfNotif = buildChannelSpecificNotification('fridayKahfPush', {
+    cityNameAr: 'مكة المكرمة',
+    nextPrayerNameAr: 'الجمعة',
+    nextPrayerTime: '12:15',
+  });
+  assert.equal(kahfNotif.category, 'FRIDAY_KAHF');
+  assert.equal(kahfNotif.mushafPage, 293);
+});
+
 
 
 

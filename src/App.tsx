@@ -397,12 +397,12 @@ export default function App() {
                 <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap group-hover:text-[#14532D] transition-colors">
                   المحراب
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
                   في محراب الطاعة · لوجه الله
                 </span>
               </div>
-              <span className="text-[10px] sm:text-xs text-stone-600 font-medium leading-tight mt-0.5 whitespace-nowrap">
-                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله.. لا تنسونا من صالح دعائكم
+              <span className="hidden xl:block text-[11px] text-stone-500 font-medium leading-tight mt-0.5 whitespace-nowrap">
+                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله
               </span>
             </div>
           </a>
@@ -597,6 +597,7 @@ export default function App() {
               setTargetMushafPage(pageNum);
               handleSelectTab('quran');
             }}
+            onOpenDawahCard={handleOpenDawahCard}
           />
         )}
 
@@ -641,101 +642,85 @@ export default function App() {
         )}
       </main>
 
-      {/* Waqf & Sadaqah Jariyah Dedication Footer (Visible on Mobile & Desktop) */}
+      {/* Waqf & Sadaqah Jariyah Dedication Footer (Clean & Non-Repetitive) */}
       <footer className="border-t border-stone-200 bg-[#F7F4EE] mt-6 pb-20 md:pb-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-4">
-          {/* Combined Slogan & Waqf Dedication Card */}
-          <div className="rounded-2xl bg-[#FBF9F5] border border-[#14532D]/20 px-4 py-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xs">
-            <div className="space-y-1.5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-5 space-y-3">
+          {/* Compact Waqf Dedication Card */}
+          <div className="rounded-2xl bg-[#FBF9F5] border border-[#14532D]/20 px-4 py-3.5 sm:px-5 sm:py-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-2xs">
+            <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#14532D] text-white">
-                  ما كان لله دام واتصل.. تطبيقٌ خالصٌ لوجه الله
+                  وقفٌ خالصٌ لوجه الله
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-[#14532D]">
-                  «في محراب الطاعة.. خالصاً لوجه الله وابتغاءَ مرضاته»
+                <span className="text-xs sm:text-sm font-bold text-stone-800">
+                  نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله — لا تنسونا من صالح دعائكم
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-medium">
-                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله — هذا العمل خالصٌ لوجه الله.. لا تنسونا من صالح دعائكم.
-              </p>
               {waqfConfig.enabled && (
                 <div
                   data-testid="active-waqf-dedication-strip"
-                  className="mt-2 pt-2 border-t border-[#14532D]/15 text-xs text-[#78350F] font-semibold"
+                  className="pt-1.5 text-xs text-[#78350F] font-semibold"
                 >
                   <span>{formatWaqfDedicationLineAr(waqfConfig)}</span>
                   {waqfConfig.customDuaAr && (
-                    <span className="block text-stone-700 font-normal mt-0.5">
-                      «{waqfConfig.customDuaAr}»
+                    <span className="text-stone-700 font-normal mr-1.5">
+                      — «{waqfConfig.customDuaAr}»
                     </span>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 w-full lg:w-auto">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
               <button
                 type="button"
                 data-testid="footer-open-waqf-modal-btn"
                 onClick={handleOpenWaqfModal}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#78350F] hover:bg-[#78350F]/90 text-white transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#78350F] hover:bg-[#78350F]/90 text-white transition-colors cursor-pointer"
               >
-                <Heart className="w-4 h-4" />
+                <Heart className="w-3.5 h-3.5" />
                 <span>
                   {waqfConfig.enabled
-                    ? 'بطاقة الوقف وتعديل الإهداء'
-                    : 'إهداء الصدقة الجارية (وقف للوالدين أو متوفى)'}
+                    ? 'تعديل بطاقة الوقف'
+                    : 'إهداء صدقة جارية (وقف)'}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={handleShareWaqfApp}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 transition-colors cursor-pointer"
               >
                 {copiedWaqfShare ? (
                   <>
-                    <Check className="w-4 h-4 text-[#14532D]" />
-                    <span>تم نسخ رابط الوقف للمشاركة في الأجر</span>
+                    <Check className="w-3.5 h-3.5 text-[#14532D]" />
+                    <span>تم نسخ الرابط</span>
                   </>
                 ) : (
                   <>
-                    <Share2 className="w-4 h-4 text-[#14532D]" />
-                    <span>شاركه صدقةً جاريةً ليعمّ الأجر</span>
+                    <Share2 className="w-3.5 h-3.5 text-[#14532D]" />
+                    <span>مشاركة التطبيق</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Editorial Links & Sources Row */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-600 pt-1">
+          {/* Sources & Privacy Policy Row */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500 pt-0.5">
             <div className="text-center sm:text-right">
-              <span className="font-display font-bold text-stone-900">المحراب</span>
+              <span className="font-display font-bold text-stone-800">المحراب</span>
               <span aria-hidden="true"> · </span>
               <span>
-                مصحف المدينة النبوية (مجمع الملك فهد) · أذكار حصن المسلم والأدعية المأثورة · الحسابات الفلكية والمواريث الشرعية
+                مصحف المدينة النبوية · حصن المسلم · المواقيت الفلكية والمواريث الشرعية
               </span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              {NAV_ITEMS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelectTab(item.id)}
-                  className="hover:text-stone-900 cursor-pointer whitespace-nowrap"
-                >
-                  {item.labelDesktop}
-                </button>
-              ))}
-              <span aria-hidden="true" className="text-stone-300">|</span>
-              <a
-                href="./privacy-policy.html"
-                className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap"
-              >
-                سياسة الخصوصية
-              </a>
-            </div>
+            <a
+              href="./privacy-policy.html"
+              className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium"
+            >
+              سياسة الخصوصية
+            </a>
           </div>
         </div>
       </footer>

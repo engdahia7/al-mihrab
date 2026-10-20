@@ -1,7 +1,7 @@
 import { toArabicNumerals, sanitizeQuranicText } from './astronomy';
 
 export type DawahCardCategory = 'ayah' | 'dhikr' | 'dua' | 'asma' | 'waqf';
-export type DawahCardThemeId = 'parchment' | 'emerald' | 'night';
+export type DawahCardThemeId = 'parchment' | 'emerald' | 'night' | 'makkah_gold';
 export type DawahCardAspectRatio = 'square' | 'story';
 
 export type WaqfDedicationCategory =
@@ -273,6 +273,25 @@ export const DAWAH_CARD_THEMES: Record<DawahCardThemeId, CardThemePalette> = {
     waqfBoxText: '#FDE68A',
     footerText: '#94A3B8',
   },
+  makkah_gold: {
+    id: 'makkah_gold',
+    nameAr: 'فجر مكة المذهّب (فاخر)',
+    bgPrimary: '#2A1808',
+    bgSecondary: '#451A03',
+    outerBorder: '#F59E0B',
+    innerBorder: '#FDE68A',
+    headerBg: '#78350F',
+    headerText: '#FEF3C7',
+    titleColor: '#FCD34D',
+    mainTextColor: '#FFFBEB',
+    explanationLabelColor: '#FDE68A',
+    explanationTextColor: '#FDE68A',
+    dividerColor: '#D97706',
+    waqfBoxBg: '#1C1006',
+    waqfBoxBorder: '#F59E0B',
+    waqfBoxText: '#FDE68A',
+    footerText: '#E7E5E4',
+  },
 };
 
 /**
@@ -318,7 +337,7 @@ export function generateDawahCardDataUrl(
   ctx.lineWidth = 3;
   ctx.strokeRect(padInner, padInner, width - padInner * 2, height - padInner * 2);
 
-  // Corner ornamental accents
+  // Corner ornamental accents & subtle Mihrab Arch watermark
   const cornerSize = 22;
   ctx.fillStyle = palette.outerBorder;
   [
@@ -329,6 +348,25 @@ export function generateDawahCardDataUrl(
   ].forEach(([cx, cy]) => {
     ctx.fillRect(cx, cy, cornerSize, cornerSize);
   });
+
+  // Subtle architectural Mihrab pointed arch behind the text
+  ctx.save();
+  ctx.strokeStyle = palette.innerBorder;
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  const archLeft = 110;
+  const archRight = width - 110;
+  const archTop = aspectRatio === 'story' ? 235 : 195;
+  const archShoulderY = aspectRatio === 'story' ? 420 : 340;
+  const archBottom = height - (aspectRatio === 'story' ? 270 : 200);
+  ctx.moveTo(archLeft, archBottom);
+  ctx.lineTo(archLeft, archShoulderY);
+  ctx.quadraticCurveTo(archLeft, archTop + 30, width / 2, archTop);
+  ctx.quadraticCurveTo(archRight, archTop + 30, archRight, archShoulderY);
+  ctx.lineTo(archRight, archBottom);
+  ctx.stroke();
+  ctx.restore();
 
   ctx.direction = 'rtl';
   ctx.textAlign = 'center';

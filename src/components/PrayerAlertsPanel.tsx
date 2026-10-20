@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Bell,
+  BellOff,
   Volume2,
   VolumeX,
   CheckCircle2,
@@ -38,11 +39,15 @@ import {
   PushNotificationChannelsConfig,
   loadPushChannelsConfig,
   savePushChannelsConfig,
+  setAllPushChannelsState,
+  areAllPushChannelsEnabled,
+  countEnabledPushChannels,
+  buildChannelSpecificNotification,
   getBrowserNotificationPermissionState,
   requestAndVerifyPushPermission,
-  buildTestPushNotification,
   dispatchSystemAndInAppNotification,
 } from '../utils/notificationDispatcher';
+import { toArabicNumerals } from '../data/quranData';
 
 interface PrayerAlertsPanelProps {
   todayTimes: DailyPrayerTimes;
@@ -58,36 +63,43 @@ interface PrayerAlertsPanelProps {
 const PUSH_CHANNEL_ITEMS: {
   key: keyof PushNotificationChannelsConfig;
   titleAr: string;
+  shortLabelAr: string;
   descAr: string;
 }[] = [
   {
     key: 'adhanPush',
     titleAr: 'إشعار دخول وقت الصلاة والأذان',
+    shortLabelAr: 'إشعار الأذان ودخول الوقت',
     descAr: 'دفع إشعار فوري مع تشغيل الأذان الأساسي المثبّت عند حلول الوقت',
   },
   {
     key: 'preAdhanPush',
     titleAr: 'التذكير قبل الأذان (الاستعداد والوضوء)',
+    shortLabelAr: 'التذكير قبل الأذان',
     descAr: 'تنبيه استباقي قبل دخول وقت الصلاة بالدقائق المحددة لكل فرض',
   },
   {
     key: 'iqamahPush',
     titleAr: 'تذكير الإقامة والسنن الرواتب والضحى',
+    shortLabelAr: 'تذكير الإقامة والسنن الرواتب',
     descAr: 'إشعار بعد الأذان للتذكير بالإقامة والسنن الرواتب وصلاة الإشراق',
   },
   {
     key: 'adhkarPush',
     titleAr: 'إشعارات أذكار الصباح والمساء',
+    shortLabelAr: 'إشعار أذكار الصباح والمساء',
     descAr: 'تذكير يومي في وقت الشروق وبعد العصر لتلاوة حصن المسلم',
   },
   {
     key: 'lastThirdPush',
     titleAr: 'منبّه الثلث الأخير من الليل (التهجّد)',
+    shortLabelAr: 'منبّه الثلث الأخير من الليل',
     descAr: 'إشعار عند بدء الثلث الأخير من الليل لقيام الليل والوتر والدعاء',
   },
   {
     key: 'fridayKahfPush',
     titleAr: 'سنن يوم الجمعة (سورة الكهف والصلاة على النبي ﷺ)',
+    shortLabelAr: 'تذكير سورة الكهف يوم الجمعة',
     descAr: 'تذكير صباح كل جمعة بقراءة سورة الكهف والإكثار من الصلاة على النبي ﷺ',
   },
 ];
@@ -108,6 +120,11 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
   const [channelsConfig, setChannelsConfig] =
     useState<PushNotificationChannelsConfig>(() => loadPushChannelsConfig());
 
+  const [selectedTriggerType, setSelectedTriggerType] =
+    useState<keyof PushNotificationChannelsConfig>('adhanPush');
+  const [showPerPrayerOffsets, setShowPerPrayerOffsets] =
+    useState<boolean>(false);
+
   const [playbackState, setPlaybackState] = useState<AdhanPlaybackState>(() =>
     getAdhanPlaybackState()
   );
@@ -124,12 +141,73 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
     };
   }, []);
 
+  const enabledChannelsCount = countEnabledPushChannels(channelsConfig);
+  const allChannelsOn = areAllPushChannelsEnabled(channelsConfig);
+  const allPrayersOn = PRAYER_METADATA.every((m) => alertsConfig[m.key]?.enabled);
+  const isEverythingEnabled = allChannelsOn && allPrayersOn;
+
   const handleToggleChannel = (key: keyof PushNotificationChannelsConfig) => {
     setChannelsConfig((prev) => {
       const updated = { ...prev, [key]: !prev[key] };
       savePushChannelsConfig(updated);
       return updated;
     });
+  };
+
+  const handleEnableAllNotifications = () => {
+    const nextChannels = setAllPushChannelsState(true);
+    setChannelsConfig(nextChannels);
+
+    onChangeAlertsConfig((prev) => {
+      const updated = { ...prev };
+      PRAYER_METADATA.forEach((meta) => {
+        updated[meta.key] = {
+          ...prev[meta.key],
+          enabled: true,
+          atAdhan: true,
+          soundId: 'custom_file',
+        };
+      });
+      return updated;
+    });
+
+    setTestAlertBanner(
+      'تم تفعيل جميع الإشعارات والصلوات والأذكار والتذكيرات بنجاح.'
+    );
+  };
+
+  const handleDisableAllNotifications = () => {
+    stopActiveAdhanAudio();
+    const nextChannels = setAllPushChannelsState(false);
+    setChannelsConfig(nextChannels);
+
+    onChangeAlertsConfig((prev) => {
+      const updated = { ...prev };
+      PRAYER_METADATA.forEach((meta) => {
+        updated[meta.key] = {
+          ...prev[meta.key],
+          enabled: false,
+        };
+      });
+      return updated;
+    });
+
+    setTestAlertBanner('تم إغلاق وإيقاف جميع الإشعارات والتنبيهات.');
+  };
+
+  const handleTriggerSpecificNotification = async (
+    channelKey: keyof PushNotificationChannelsConfig
+  ) => {
+    const itemMeta = PUSH_CHANNEL_ITEMS.find((c) => c.key === channelKey);
+    const notif = buildChannelSpecificNotification(channelKey, {
+      cityNameAr,
+      nextPrayerNameAr,
+      nextPrayerTime,
+    });
+    await dispatchSystemAndInAppNotification(notif);
+    setTestAlertBanner(
+      `تم تشغيل ودفع «${itemMeta?.shortLabelAr || notif.titleAr}» أعلى الهاتف بنجاح.`
+    );
   };
 
   const handleEnablePushNotifications = async () => {
@@ -140,18 +218,6 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
     );
     setNotificationPermission(res.permissionState);
     setTestAlertBanner(res.statusMessageAr);
-  };
-
-  const handleSendTestPush = async () => {
-    const testNotif = buildTestPushNotification(
-      cityNameAr,
-      nextPrayerNameAr,
-      nextPrayerTime
-    );
-    await dispatchSystemAndInAppNotification(testNotif);
-    setTestAlertBanner(
-      `تم دفع إشعار تجريبي فوري لمدينة ${cityNameAr} (صلاة ${nextPrayerNameAr} الساعة ${nextPrayerTime}).`
-    );
   };
 
   const handleTogglePrayerEnabled = (key: MainPrayerKey) => {
@@ -231,9 +297,9 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
       aria-labelledby="prayer-alerts-heading"
       className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-5"
     >
-      {/* Compact Header & Push Controls */}
+      {/* Top Header & Bulk Master Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Bell className="w-4 h-4 text-[#14532D]" />
           <h3
             id="prayer-alerts-heading"
@@ -258,7 +324,34 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Master Enable All / Disable All + System Permission Buttons */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            data-testid="enable-all-notifications-btn"
+            onClick={handleEnableAllNotifications}
+            disabled={isEverythingEnabled}
+            className={`min-h-[34px] px-3 py-1 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer ${
+              isEverythingEnabled
+                ? 'bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/30 opacity-70 cursor-default'
+                : 'bg-[#14532D] text-white hover:bg-[#14532D]/90 shadow-xs'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>تفعيل الإشعارات كلها</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="disable-all-notifications-btn"
+            onClick={handleDisableAllNotifications}
+            disabled={enabledChannelsCount === 0 && !PRAYER_METADATA.some((m) => alertsConfig[m.key]?.enabled)}
+            className="min-h-[34px] px-3 py-1 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+          >
+            <BellOff className="w-3.5 h-3.5 text-stone-600" />
+            <span>إغلاق الإشعارات كلها</span>
+          </button>
+
           {notificationPermission !== 'granted' && (
             <button
               type="button"
@@ -266,29 +359,59 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
               onClick={handleEnablePushNotifications}
               className="min-h-[34px] px-3 py-1 text-xs font-semibold text-[#14532D] bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/30 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <Bell className="w-3.5 h-3.5" />
-              <span>تفعيل دفع الإشعارات للنظام</span>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>تفعيل إشعارات النظام</span>
             </button>
           )}
+        </div>
+      </div>
 
-          <button
-            type="button"
-            data-testid="send-test-push-btn"
-            onClick={handleSendTestPush}
-            className="min-h-[34px] px-3 py-1 text-xs font-semibold text-stone-800 bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-300 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+      {/* Dedicated Selector Bar: Trigger Any Specific Notification Type Immediately */}
+      <div
+        data-testid="specific-notification-trigger-bar"
+        className="bg-[#FBF9F5] border border-stone-200 rounded-2xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5"
+      >
+        <div className="flex items-center gap-2">
+          <Send className="w-4 h-4 text-[#78350F] shrink-0" />
+          <div>
+            <span className="text-xs font-bold text-stone-900 block">
+              تشغيل وتجربة نوع معيّن من الإشعارات فوراً
+            </span>
+            <span className="text-[11px] text-stone-500 block">
+              اختر نوع الإشعار واضغط تشغيل ليظهر فوراً أعلى الهاتف مع شعار المحراب
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="اختر نوع الإشعار المراد تشغيله"
+            data-testid="select-notification-type"
+            value={selectedTriggerType}
+            onChange={(e) =>
+              setSelectedTriggerType(
+                e.target.value as keyof PushNotificationChannelsConfig
+              )
+            }
+            className="min-h-[36px] px-3 py-1.5 rounded-xl bg-white border border-stone-300 text-xs font-semibold text-stone-800 focus:outline-none focus:border-[#14532D] cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5 text-[#78350F]" />
-            <span>إرسال إشعار تجريبي</span>
-          </button>
+            {PUSH_CHANNEL_ITEMS.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.shortLabelAr}
+              </option>
+            ))}
+          </select>
 
           <button
             type="button"
-            data-testid="test-alert-btn"
-            onClick={() => handlePlayAdhan()}
-            className="min-h-[34px] px-3.5 py-1 text-xs font-semibold text-white bg-[#14532D] hover:bg-[#14532D]/90 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            data-testid="trigger-selected-notification-type-btn"
+            onClick={() =>
+              void handleTriggerSpecificNotification(selectedTriggerType)
+            }
+            className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] text-white text-xs font-bold hover:bg-[#14532D]/90 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
           >
             <BellRing className="w-3.5 h-3.5" />
-            <span>معاينة الأذان</span>
+            <span>تشغيل هذا الإشعار الآن</span>
           </button>
         </div>
       </div>
@@ -430,16 +553,26 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
         data-testid="push-channels-grid"
         className="bg-[#FBF9F5] border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#78350F]" />
             <h4 className="text-xs sm:text-sm font-bold text-stone-900">
               قنوات دفع الإشعارات والتذكيرات الآلية
             </h4>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-700">
+              مفعّل {toArabicNumerals(enabledChannelsCount)} من ٦
+            </span>
           </div>
-          <span className="text-[11px] text-stone-500">
-            تعمل تلقائياً في أوقاتها الشرعية
-          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowPerPrayerOffsets((prev) => !prev)}
+            className="px-3 py-1 rounded-lg text-xs font-bold bg-white border border-stone-300 text-stone-800 hover:bg-stone-100 transition-colors cursor-pointer"
+          >
+            {showPerPrayerOffsets
+              ? 'إخفاء تخصيص دقائق كل صلاة'
+              : 'تخصيص دقائق التنبيه لكل صلاة (قبل الأذان والإقامة)'}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -449,7 +582,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
               <div
                 key={ch.key}
                 data-testid={`push-channel-${ch.key}`}
-                className={`p-3 rounded-xl border transition-colors flex items-start justify-between gap-2.5 ${
+                className={`p-3 rounded-xl border transition-colors flex flex-col justify-between gap-2.5 ${
                   isOn
                     ? 'bg-white border-[#14532D]/35'
                     : 'bg-stone-100/70 border-stone-200 opacity-75'
@@ -463,120 +596,136 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
                     {ch.descAr}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  data-testid={`toggle-channel-${ch.key}`}
-                  onClick={() => handleToggleChannel(ch.key)}
-                  className={`shrink-0 min-h-[28px] px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                    isOn
-                      ? 'bg-[#14532D] text-white'
-                      : 'bg-stone-200 text-stone-700'
-                  }`}
-                >
-                  {isOn ? 'مفعّل' : 'موقوف'}
-                </button>
+
+                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-100">
+                  <button
+                    type="button"
+                    data-testid={`trigger-channel-${ch.key}`}
+                    onClick={() => void handleTriggerSpecificNotification(ch.key)}
+                    className="min-h-[28px] px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-200 text-[#78350F] flex items-center gap-1 transition-colors cursor-pointer"
+                    title={`تشغيل وتجربة ${ch.shortLabelAr} الآن`}
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>تشغيل الآن</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid={`toggle-channel-${ch.key}`}
+                    onClick={() => handleToggleChannel(ch.key)}
+                    className={`shrink-0 min-h-[28px] px-3 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                      isOn
+                        ? 'bg-[#14532D] text-white'
+                        : 'bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {isOn ? 'مفعّل' : 'موقوف'}
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* 6-Card Prayer Alert Timing & Toggle Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        {PRAYER_METADATA.map((meta) => {
-          const cfg = alertsConfig[meta.key];
-          const timeStr = todayTimes[meta.key];
-          return (
-            <div
-              key={meta.key}
-              className={`rounded-2xl border p-3 flex flex-col justify-between gap-2.5 transition-colors ${
-                cfg.enabled
-                  ? 'bg-[#FBF9F5] border-[#14532D]/40'
-                  : 'bg-stone-50 border-stone-200 opacity-75'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-display text-sm font-bold text-stone-900">
-                  {meta.nameAr}
-                </span>
-                <span className="font-tabular text-xs font-bold text-stone-600">
-                  {timeStr}
-                </span>
-              </div>
-
-              {cfg.enabled && (
-                <div className="space-y-1.5 pt-1 border-t border-stone-200/70 text-[10px] text-stone-600">
-                  <div className="flex items-center justify-between gap-1">
-                    <span>قبل الأذان:</span>
-                    <select
-                      aria-label={`التنبيه قبل أذان ${meta.nameAr}`}
-                      value={cfg.beforeMinutes}
-                      onChange={(e) =>
-                        handleChangeBeforeMinutes(
-                          meta.key,
-                          Number(e.target.value)
-                        )
-                      }
-                      className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
-                    >
-                      <option value={0}>بدون</option>
-                      <option value={5}>٥ د</option>
-                      <option value={10}>١٠ د</option>
-                      <option value={15}>١٥ د</option>
-                      <option value={20}>٢٠ د</option>
-                      <option value={30}>٣٠ د</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>الإقامة:</span>
-                    <select
-                      aria-label={`تذكير إقامة ${meta.nameAr}`}
-                      value={cfg.afterMinutes}
-                      onChange={(e) =>
-                        handleChangeAfterMinutes(
-                          meta.key,
-                          Number(e.target.value)
-                        )
-                      }
-                      className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
-                    >
-                      <option value={0}>بدون</option>
-                      <option value={5}>٥ د</option>
-                      <option value={10}>١٠ د</option>
-                      <option value={15}>١٥ د</option>
-                      <option value={20}>٢٠ د</option>
-                      <option value={30}>٣٠ د</option>
-                    </select>
-                  </div>
+      {/* Collapsible 6-Card Prayer Alert Timing & Toggle Grid */}
+      {showPerPrayerOffsets && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+          {PRAYER_METADATA.map((meta) => {
+            const cfg = alertsConfig[meta.key];
+            const timeStr = todayTimes[meta.key];
+            return (
+              <div
+                key={meta.key}
+                className={`rounded-2xl border p-3 flex flex-col justify-between gap-2.5 transition-colors ${
+                  cfg.enabled
+                    ? 'bg-[#FBF9F5] border-[#14532D]/40'
+                    : 'bg-stone-50 border-stone-200 opacity-75'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-display text-sm font-bold text-stone-900">
+                    {meta.nameAr}
+                  </span>
+                  <span className="font-tabular text-xs font-bold text-stone-600">
+                    {timeStr}
+                  </span>
                 </div>
-              )}
 
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleTogglePrayerEnabled(meta.key)}
-                  className={`flex-1 min-h-[30px] px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
-                    cfg.enabled
-                      ? 'bg-[#14532D] text-white'
-                      : 'bg-stone-200 text-stone-700'
-                  }`}
-                >
-                  {cfg.enabled ? 'مفعّل' : 'صامت'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePlayAdhan(meta.nameAr)}
-                  aria-label={`تشغيل أذان ${meta.nameAr}`}
-                  className="min-h-[30px] px-2 py-1 rounded-lg bg-[#F7F4EE] hover:bg-stone-200 border border-stone-200 text-stone-700 cursor-pointer"
-                  title={`معاينة أذان ${meta.nameAr}`}
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
+                {cfg.enabled && (
+                  <div className="space-y-1.5 pt-1 border-t border-stone-200/70 text-[10px] text-stone-600">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>قبل الأذان:</span>
+                      <select
+                        aria-label={`التنبيه قبل أذان ${meta.nameAr}`}
+                        value={cfg.beforeMinutes}
+                        onChange={(e) =>
+                          handleChangeBeforeMinutes(
+                            meta.key,
+                            Number(e.target.value)
+                          )
+                        }
+                        className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
+                      >
+                        <option value={0}>بدون</option>
+                        <option value={5}>٥ د</option>
+                        <option value={10}>١٠ د</option>
+                        <option value={15}>١٥ د</option>
+                        <option value={20}>٢٠ د</option>
+                        <option value={30}>٣٠ د</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span>الإقامة:</span>
+                      <select
+                        aria-label={`تذكير إقامة ${meta.nameAr}`}
+                        value={cfg.afterMinutes}
+                        onChange={(e) =>
+                          handleChangeAfterMinutes(
+                            meta.key,
+                            Number(e.target.value)
+                          )
+                        }
+                        className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
+                      >
+                        <option value={0}>بدون</option>
+                        <option value={5}>٥ د</option>
+                        <option value={10}>١٠ د</option>
+                        <option value={15}>١٥ د</option>
+                        <option value={20}>٢٠ د</option>
+                        <option value={30}>٣٠ د</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePrayerEnabled(meta.key)}
+                    className={`flex-1 min-h-[30px] px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                      cfg.enabled
+                        ? 'bg-[#14532D] text-white'
+                        : 'bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {cfg.enabled ? 'مفعّل' : 'صامت'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePlayAdhan(meta.nameAr)}
+                    aria-label={`تشغيل أذان ${meta.nameAr}`}
+                    className="min-h-[30px] px-2 py-1 rounded-lg bg-[#F7F4EE] hover:bg-stone-200 border border-stone-200 text-stone-700 cursor-pointer"
+                    title={`معاينة أذان ${meta.nameAr}`}
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 };

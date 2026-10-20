@@ -86,6 +86,155 @@ export function savePushChannelsConfig(
   }
 }
 
+export const ALL_PUSH_CHANNEL_KEYS: (keyof PushNotificationChannelsConfig)[] = [
+  'adhanPush',
+  'preAdhanPush',
+  'iqamahPush',
+  'adhkarPush',
+  'lastThirdPush',
+  'fridayKahfPush',
+];
+
+export function setAllPushChannelsState(
+  enabled: boolean
+): PushNotificationChannelsConfig {
+  const nextConfig: PushNotificationChannelsConfig = {
+    adhanPush: enabled,
+    preAdhanPush: enabled,
+    iqamahPush: enabled,
+    adhkarPush: enabled,
+    lastThirdPush: enabled,
+    fridayKahfPush: enabled,
+  };
+  savePushChannelsConfig(nextConfig);
+  return nextConfig;
+}
+
+export function countEnabledPushChannels(
+  config: PushNotificationChannelsConfig
+): number {
+  return ALL_PUSH_CHANNEL_KEYS.filter((k) => Boolean(config[k])).length;
+}
+
+export function areAllPushChannelsEnabled(
+  config: PushNotificationChannelsConfig
+): boolean {
+  return countEnabledPushChannels(config) === ALL_PUSH_CHANNEL_KEYS.length;
+}
+
+export function buildChannelSpecificNotification(
+  channelKey: keyof PushNotificationChannelsConfig,
+  params: {
+    cityNameAr: string;
+    nextPrayerNameAr: string;
+    nextPrayerTime: string;
+  }
+): DispatchedIslamicNotification {
+  const { cityNameAr, nextPrayerNameAr, nextPrayerTime } = params;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const currentHHMM = `${hh}:${mm}`;
+
+  switch (channelKey) {
+    case 'adhanPush':
+      return {
+        id: `manual-adhan-${Date.now()}`,
+        category: 'ADHAN',
+        titleAr: `حان الآن موعد أذان ${nextPrayerNameAr} (${nextPrayerTime})`,
+        bodyAr: `حسب التوقيت المحلي لمدينة ${cityNameAr} — حيّ على الصلاة، حيّ على الفلاح.`,
+        subtitleOrHadithAr: DUA_AFTER_ADHAN_AR,
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: true,
+        prayerNameAr: nextPrayerNameAr,
+        actionTab: 'prayers',
+        actionLabelAr: 'عرض المواقيت والدعاء',
+      };
+
+    case 'preAdhanPush':
+      return {
+        id: `manual-pre-adhan-${Date.now()}`,
+        category: 'PRE_ADHAN',
+        titleAr: `اقترب أذان ${nextPrayerNameAr} (متبقٍّ ١٠ دقائق)`,
+        bodyAr: `موعد أذان ${nextPrayerNameAr} في ${cityNameAr} الساعة ${nextPrayerTime} — تهيّأ بالوضوء والاستعداد للصلاة.`,
+        subtitleOrHadithAr:
+          'قال ﷺ: «ألا أدلّكم على ما يمحو الله به الخطايا ويرفع به الدرجات؟ إسباغ الوضوء على المكاره، وكثرة الخطا إلى المساجد، وانتظار الصلاة بعد الصلاة» — رواه مسلم',
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: false,
+        prayerNameAr: nextPrayerNameAr,
+        actionTab: 'prayers',
+        actionLabelAr: 'مواقيت الصلاة',
+      };
+
+    case 'iqamahPush':
+      return {
+        id: `manual-iqamah-${Date.now()}`,
+        category: 'IQAMAH',
+        titleAr: `تذكير إقامة صلاة ${nextPrayerNameAr} والسنن الرواتب`,
+        bodyAr: `اقتربت إقامة صلاة ${nextPrayerNameAr} في ${cityNameAr} — لا تنسَ السنن الرواتب وأذكار دبر الصلاة.`,
+        subtitleOrHadithAr:
+          'قال ﷺ: «مَن صلّى في يوم وليلة اثنتي عشرة ركعة تطوعاً غير الفريضة بنى الله له بيتاً في الجنة» — رواه مسلم',
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: false,
+        prayerNameAr: nextPrayerNameAr,
+        actionTab: 'adhkar',
+        actionLabelAr: 'أذكار بعد الصلاة',
+      };
+
+    case 'adhkarPush':
+      return {
+        id: `manual-adhkar-${Date.now()}`,
+        category: 'ADHKAR_MORNING',
+        titleAr: 'تذكير أذكار الصباح والمساء — حصن المسلم',
+        bodyAr:
+          'حصّن نفسك وأهلك بتلاوة أذكار الصباح والمساء المأثورة عن النبي ﷺ بالعدّاد التفاعلي.',
+        subtitleOrHadithAr:
+          'قال تعالى: ﴿وَسَبِّحْ بِحَمْدِ رَبِّكَ قَبْلَ طُلُوعِ الشَّمْسِ وَقَبْلَ غُرُوبِهَا﴾ [طه: ١٣٠]',
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: false,
+        actionTab: 'adhkar',
+        actionLabelAr: 'فتح حصن المسلم',
+      };
+
+    case 'lastThirdPush':
+      return {
+        id: `manual-last-third-${Date.now()}`,
+        category: 'LAST_THIRD',
+        titleAr: 'منبّه الثلث الأخير من الليل — وقت التهجّد والدعاء',
+        bodyAr:
+          'وقت الأسحار والتنزّل الإلهي واستجابة الدعاء — أوتر ولو بركعة وناجِ ربك.',
+        subtitleOrHadithAr:
+          'قال ﷺ: «ينزل ربنا تبارك وتعالى كل ليلة إلى السماء الدنيا حين يبقى ثلث الليل الآخر فيقول: من يدعوني فأستجيب له» — متفق عليه',
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: false,
+        actionTab: 'duas',
+        actionLabelAr: 'أدعية قيام الليل',
+      };
+
+    case 'fridayKahfPush':
+      return {
+        id: `manual-friday-kahf-${Date.now()}`,
+        category: 'FRIDAY_KAHF',
+        titleAr: 'سنن يوم الجمعة: سورة الكهف والصلاة على النبي ﷺ',
+        bodyAr:
+          'أكثروا من الصلاة على النبي ﷺ في يوم الجمعة، ونوّروا جمعتكم بتلاوة سورة الكهف.',
+        subtitleOrHadithAr:
+          'قال ﷺ: «مَن قرأ سورة الكهف في يوم الجمعة أضاء له من النور ما بين الجمعتين» — صححه الألباني',
+        timestampHHMM: currentHHMM,
+        createdAtMs: Date.now(),
+        shouldPlayFullAdhan: false,
+        actionTab: 'quran',
+        actionLabelAr: 'فتح سورة الكهف (ص ٢٩٣)',
+        mushafPage: 293,
+      };
+  }
+}
+
 /**
  * Pure function that evaluates whether the current HH:MM matches any enabled
  * Prayer Adhan, Pre-Adhan, Iqamah, Morning/Evening Adhkar, Last Third of Night, or Friday Kahf alert.

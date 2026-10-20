@@ -49,10 +49,12 @@ import {
   dispatchSystemAndInAppNotification,
   loadPushChannelsConfig,
 } from '../utils/notificationDispatcher';
+import { WorshipAndQadaHub } from './WorshipAndQadaHub';
+import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const ALERTS_STORAGE_KEY = 'almihrab_prayer_alerts_v1';
 
-export type PrayersSubScreen = 'widgets' | 'alerts' | 'monthly_travel';
+export type PrayersSubScreen = 'widgets' | 'alerts' | 'worship_qada' | 'monthly_travel';
 
 interface PrayerTimesViewProps {
   selectedCity: CityLocation;
@@ -64,6 +66,7 @@ interface PrayerTimesViewProps {
   hijriAdjustment: number;
   onNavigateTab: (tab: 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla') => void;
   onOpenMushafPage?: (page: number) => void;
+  onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
 }
 
 export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
@@ -76,10 +79,11 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
   hijriAdjustment,
   onNavigateTab,
   onOpenMushafPage,
+  onOpenDawahCard,
 }) => {
   const [now, setNow] = useState<Date>(() => new Date());
   const [activeSubScreen, setActiveSubScreen] =
-    useState<PrayersSubScreen>('alerts');
+    useState<PrayersSubScreen>('worship_qada');
   const [showAdvancedSettings, setShowAdvancedSettings] =
     useState<boolean>(false);
   const [showMonthlyTable, setShowMonthlyTable] = useState<boolean>(false);
@@ -666,10 +670,6 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           </div>
         </div>
 
-        <p className="text-[11px] text-stone-600 leading-relaxed">
-          {sunnahWindows.activeStatus.virtueOrRulingAr}
-        </p>
-
         {showProhibitedDetails && (
           <div className="pt-2 border-t border-stone-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
             {sunnahWindows.prohibitedWindows.map((pw) => (
@@ -690,12 +690,27 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         )}
       </section>
 
-      {/* 3. Concise 3-Tab Sub-Screen Switcher (No duplicate prayer clocks on default view) */}
+      {/* 3. Concise 4-Tab Sub-Screen Switcher */}
       <div
         role="tablist"
-        aria-label="أقسام التنبيهات والإمساكية والويدجت"
-        className="grid grid-cols-3 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
+        aria-label="أقسام المحاسبة والتنبيهات والإمساكية والويدجت"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
       >
+        <button
+          type="button"
+          role="tab"
+          data-testid="subtab-worship-qada"
+          aria-selected={activeSubScreen === 'worship_qada'}
+          onClick={() => setActiveSubScreen('worship_qada')}
+          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
+            activeSubScreen === 'worship_qada'
+              ? 'bg-[#14532D] text-white shadow-xs'
+              : 'text-stone-700 hover:bg-stone-200/70'
+          }`}
+        >
+          <span>المحاسبة والقضاء والخلوة</span>
+        </button>
+
         <button
           type="button"
           role="tab"
@@ -708,7 +723,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>الأذان والتنبيهات</span>
+          <span>الأذان والإشعارات</span>
         </button>
 
         <button
@@ -742,18 +757,12 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         </button>
       </div>
 
-      {/* SUB-SCREEN 1: Multi-Widget Suite (6 Simultaneous Interactive Widgets) */}
-      {activeSubScreen === 'widgets' && (
-        <SmartIslamicWidgets
-          selectedCity={selectedCity}
-          todayTimes={todayTimes}
-          nextPrayerInfo={nextPrayerInfo}
-          hijriDate={hijriDate}
-          qiblaAngle={qiblaAngle}
-          now={now}
-          onOpenMushafPage={onOpenMushafPage}
-          onNavigateToQibla={() => onNavigateTab('qibla')}
-          onDetectLocation={handleGeolocation}
+      {/* SUB-SCREEN 1: Worship Tracker, Qada Calculator, Khushu Retreat & Daily PNG Card Studio */}
+      {activeSubScreen === 'worship_qada' && (
+        <WorshipAndQadaHub
+          hijriDay={hijriDate.day}
+          hijriMonthNameAr={hijriDate.monthNameAr}
+          onOpenDawahCard={onOpenDawahCard}
         />
       )}
 
@@ -766,6 +775,21 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           cityNameAr={selectedCity.nameAr}
           nextPrayerNameAr={nextPrayerInfo.nextPrayerNameAr}
           nextPrayerTime={nextPrayerInfo.nextPrayerTime}
+        />
+      )}
+
+      {/* SUB-SCREEN 3: Multi-Widget Suite (6 Simultaneous Interactive Widgets) */}
+      {activeSubScreen === 'widgets' && (
+        <SmartIslamicWidgets
+          selectedCity={selectedCity}
+          todayTimes={todayTimes}
+          nextPrayerInfo={nextPrayerInfo}
+          hijriDate={hijriDate}
+          qiblaAngle={qiblaAngle}
+          now={now}
+          onOpenMushafPage={onOpenMushafPage}
+          onNavigateToQibla={() => onNavigateTab('qibla')}
+          onDetectLocation={handleGeolocation}
         />
       )}
 

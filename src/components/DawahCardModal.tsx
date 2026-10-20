@@ -7,6 +7,8 @@ import {
   Heart,
   Image as ImageIcon,
   Copy,
+  Sparkles,
+  Edit3,
 } from 'lucide-react';
 import {
   DawahShareCardPayload,
@@ -22,6 +24,11 @@ import {
   buildWaqfCertificateCardPayload,
   buildWaqfShareUrl,
 } from '../utils/dawahShareCards';
+import {
+  DAILY_INSPIRATION_PRESETS,
+  getDailyInspirationPresetForDate,
+  presetToDawahCardPayload,
+} from '../utils/worshipTrackerAndTools';
 
 interface DawahCardModalProps {
   isOpen: boolean;
@@ -46,6 +53,12 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
   const [customDedicationOverride, setCustomDedicationOverride] = useState<string>('');
   const [copiedShareLink, setCopiedShareLink] = useState<boolean>(false);
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
+  const [showCustomEditor, setShowCustomEditor] = useState<boolean>(false);
+
+  // Studio editable payload for "آية اليوم وذكر اليوم"
+  const [studioPayload, setStudioPayload] = useState<DawahShareCardPayload>(() =>
+    presetToDawahCardPayload(getDailyInspirationPresetForDate())
+  );
 
   // Local editable Waqf form state
   const [draftWaqf, setDraftWaqf] = useState<WaqfDedicationConfig>(waqfConfig);
@@ -55,6 +68,13 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
     if (isOpen) {
       setActiveTab(initialMode);
       setDraftWaqf(waqfConfig);
+      const basePayload =
+        initialPayload ||
+        presetToDawahCardPayload(
+          getDailyInspirationPresetForDate(),
+          formatWaqfDedicationLineAr(waqfConfig)
+        );
+      setStudioPayload(basePayload);
       setCustomDedicationOverride(
         initialPayload?.waqfDedicationLineAr ||
           formatWaqfDedicationLineAr(waqfConfig)
@@ -64,16 +84,16 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
   }, [isOpen, initialMode, initialPayload, waqfConfig]);
 
   const effectivePayload: DawahShareCardPayload = useMemo(() => {
-    if (activeTab === 'waqf_settings' || !initialPayload) {
+    if (activeTab === 'waqf_settings') {
       return buildWaqfCertificateCardPayload(draftWaqf);
     }
     return {
-      ...initialPayload,
+      ...studioPayload,
       waqfDedicationLineAr:
         customDedicationOverride.trim() ||
         formatWaqfDedicationLineAr(draftWaqf),
     };
-  }, [activeTab, initialPayload, draftWaqf, customDedicationOverride]);
+  }, [activeTab, studioPayload, draftWaqf, customDedicationOverride]);
 
   const cardDataUrl = useMemo(() => {
     if (!isOpen) return null;
@@ -84,6 +104,19 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
   }, [isOpen, effectivePayload, theme, aspectRatio]);
 
   if (!isOpen) return null;
+
+  const handleSelectDailyPreset = (presetId: string) => {
+    const found =
+      DAILY_INSPIRATION_PRESETS.find((p) => p.id === presetId) ||
+      DAILY_INSPIRATION_PRESETS[0];
+    setStudioPayload(
+      presetToDawahCardPayload(
+        found,
+        customDedicationOverride.trim() || formatWaqfDedicationLineAr(draftWaqf)
+      )
+    );
+    setActiveTab('card');
+  };
 
   const handleSelectWaqfCategory = (catId: WaqfDedicationCategory) => {
     const preset =
@@ -233,16 +266,16 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
       <div
         data-testid="dawah-waqf-modal"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl max-h-[92dvh] overflow-y-auto bg-[#FAF5E8] border-2 border-[#B59E7A] rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-stone-900"
+        className="w-full max-w-4xl max-h-[92dvh] overflow-y-auto bg-[#FAF5E8] border-2 border-[#B59E7A] rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-stone-900"
       >
         {/* Modal Header */}
         <div className="flex items-start justify-between gap-3 border-b border-[#D8CBB3] pb-3">
           <div>
             <h2 className="font-display text-lg sm:text-xl font-bold text-[#14532D]">
-              بطاقات المشاركة الدعوية وإهداء الصدقة الجارية
+              استوديو بطاقة «آية اليوم وذكر اليوم» وإهداء الصدقة الجارية (PNG)
             </h2>
             <p className="text-xs text-stone-600 mt-0.5">
-              نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله — صمّم بطاقة مصوّرة (PNG) أو خصّص وقفاً باسم الوالدين أو متوفى
+              صمّم بطاقات دعوية فاخرة بالرسم العثماني مع التفسير والحديث الشريف وزخارف المحراب لتحميلها كصورة عالية الدقة ومشاركتها في واتساب وإنستغرام
             </p>
           </div>
 
@@ -268,7 +301,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
-            <span>بطاقة المشاركة المصوّرة (PNG)</span>
+            <span>استوديو بطاقة آية اليوم وذكر اليوم (PNG)</span>
           </button>
 
           <button
@@ -285,6 +318,145 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
             <span>إهداء ثواب الختمة والصدقة الجارية</span>
           </button>
         </div>
+
+        {/* =================================================================
+            DAILY AYAH & DHIKR PRESET BAR + CUSTOM TEXT EDITOR (In Card Mode)
+           ================================================================= */}
+        {activeTab === 'card' && (
+          <div className="bg-white border border-[#D8CBB3] rounded-2xl p-3.5 sm:p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#14532D]">
+                <Sparkles className="w-4 h-4 text-[#78350F]" />
+                <span>اختر من روائع «آية اليوم وذكر اليوم» الجاهزة أو حرّر النص بحرية:</span>
+              </div>
+              <button
+                type="button"
+                data-testid="toggle-custom-card-editor-btn"
+                onClick={() => setShowCustomEditor((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF5E8] hover:bg-[#EFE4CE] text-[#78350F] border border-[#C8B696] cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>
+                  {showCustomEditor ? 'إخفاء محرّر النصوص' : 'تخصيص نص الآية أو التفسير يدوياً'}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {DAILY_INSPIRATION_PRESETS.map((preset) => {
+                const isSelected =
+                  studioPayload.mainArabicText === preset.mainArabicText;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    data-testid={`studio-preset-${preset.id}`}
+                    onClick={() => handleSelectDailyPreset(preset.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#14532D] text-white border-[#14532D]'
+                        : 'bg-[#FAF5E8] text-stone-800 border-[#D8CBB3] hover:bg-[#EFE4CE]'
+                    }`}
+                  >
+                    {preset.titleAr}
+                  </button>
+                );
+              })}
+            </div>
+
+            {showCustomEditor && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-stone-100">
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    نوع البطاقة (لإحاطة الآيات بأقواس المصحف ﴿ ﴾):
+                  </label>
+                  <select
+                    value={studioPayload.category}
+                    onChange={(e) =>
+                      setStudioPayload((prev) => ({
+                        ...prev,
+                        category: e.target.value as DawahShareCardPayload['category'],
+                      }))
+                    }
+                    className="w-full min-h-[36px] px-3 py-1.5 text-xs bg-[#FAF5E8] border border-[#C8B696] rounded-xl text-stone-900"
+                  >
+                    <option value="ayah">آية قرآنية بالرسم العثماني ﴿ ... ﴾</option>
+                    <option value="dhikr">حديث شريف أو ذكر مأثور « ... »</option>
+                    <option value="dua">دعاء مأثور « ... »</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    عنوان السورة أو الموضوع:
+                  </label>
+                  <input
+                    type="text"
+                    value={studioPayload.titleAr}
+                    onChange={(e) =>
+                      setStudioPayload((prev) => ({
+                        ...prev,
+                        titleAr: e.target.value,
+                      }))
+                    }
+                    className="w-full min-h-[36px] px-3 py-1.5 text-xs bg-[#FAF5E8] border border-[#C8B696] rounded-xl text-stone-900"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    النص الرئيسي (الآية القرآنية أو الحديث أو الذكر):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={studioPayload.mainArabicText}
+                    onChange={(e) =>
+                      setStudioPayload((prev) => ({
+                        ...prev,
+                        mainArabicText: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 text-xs bg-[#FAF5E8] border border-[#C8B696] rounded-xl text-stone-900 font-quran"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    التفسير الميسّر أو الفضل:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={studioPayload.explanationOrVirtueAr || ''}
+                    onChange={(e) =>
+                      setStudioPayload((prev) => ({
+                        ...prev,
+                        explanationOrVirtueAr: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 text-xs bg-[#FAF5E8] border border-[#C8B696] rounded-xl text-stone-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    المصدر والتخريج (السورة والآية أو راوي الحديث):
+                  </label>
+                  <input
+                    type="text"
+                    value={studioPayload.sourceAndGradingAr || ''}
+                    onChange={(e) =>
+                      setStudioPayload((prev) => ({
+                        ...prev,
+                        sourceAndGradingAr: e.target.value,
+                      }))
+                    }
+                    className="w-full min-h-[36px] px-3 py-1.5 text-xs bg-[#FAF5E8] border border-[#C8B696] rounded-xl text-stone-900"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* =================================================================
             TAB 1: WAQF & SADAQAH JARIYAH DEDICATION SETTINGS
@@ -437,7 +609,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
           <div className="md:col-span-5 bg-white border border-[#D8CBB3] rounded-2xl p-4 space-y-3.5">
             <div className="space-y-1.5">
               <span className="block text-xs font-bold text-stone-800">
-                نمط تصميم البطاقة:
+                نمط وزخرفة المحراب في البطاقة:
               </span>
               <div className="grid grid-cols-1 gap-1.5">
                 {(Object.keys(DAWAH_CARD_THEMES) as DawahCardThemeId[]).map(
@@ -469,7 +641,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
 
             <div className="space-y-1.5">
               <span className="block text-xs font-bold text-stone-800">
-                مقاس الصورة:
+                مقاس الصورة (للواتساب وإنستغرام):
               </span>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -481,7 +653,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
                       : 'bg-[#FAF5E8] text-stone-800 border-[#D8CBB3]'
                   }`}
                 >
-                  مربّع (منشور)
+                  مربّع (منشور انستغرام)
                 </button>
                 <button
                   type="button"
@@ -492,7 +664,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
                       : 'bg-[#FAF5E8] text-stone-800 border-[#D8CBB3]'
                   }`}
                 >
-                  طولي (حالة واتساب)
+                  طولي (حالة واتساب / ستوري)
                 </button>
               </div>
             </div>
@@ -535,7 +707,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
                   className="w-full min-h-[40px] py-2 px-4 rounded-xl bg-[#EFE4CE] hover:bg-[#E5D6B8] text-stone-900 border border-[#C8B696] text-xs font-bold flex items-center justify-center gap-2"
                 >
                   <Download className="w-4 h-4 text-[#14532D]" />
-                  <span>تنزيل البطاقة كصورة (PNG)</span>
+                  <span>تنزيل البطاقة كصورة عالية الدقة (PNG)</span>
                 </a>
               )}
 
@@ -552,7 +724,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
             <span className="text-xs font-bold text-[#78350F]">
               {activeTab === 'waqf_settings'
                 ? 'معاينة وثيقة الوقف والصدقة الجارية المصوّرة:'
-                : 'معاينة البطاقة الدعوية الجاهزة للمشاركة:'}
+                : 'معاينة بطاقة آية اليوم وذكر اليوم الجاهزة للمشاركة (PNG):'}
             </span>
             {cardDataUrl && (
               <img

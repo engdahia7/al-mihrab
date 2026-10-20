@@ -770,9 +770,16 @@ export const QuranView: React.FC<QuranViewProps> = ({
         setPlayingAyahKey(null);
         return;
       }
-      const audio = new Audio(candidateUrls[idx]);
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+      const audio = audioRef.current;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
       audio.preload = 'auto';
-      audioRef.current = audio;
+      audio.src = candidateUrls[idx];
+      audio.currentTime = 0;
       setPlayingAyahKey(key);
 
       audio.onended = () => {

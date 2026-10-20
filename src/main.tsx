@@ -26,7 +26,26 @@ console.error = (...args: unknown[]) => {
   }
 };
 
-// Register Service Worker and immediately activate updates on mobile devices
+// Clear stale Service Worker precaches on version upgrade or in dev mode so updates apply immediately
+const APP_BUILD_VERSION = 'almihrab-2026-10-20-ruqyah-v4';
+try {
+  const prevVersion = localStorage.getItem('almihrab_build_version');
+  if (prevVersion !== APP_BUILD_VERSION) {
+    localStorage.setItem('almihrab_build_version', APP_BUILD_VERSION);
+    if ('caches' in window) {
+      void caches.keys().then((keys) => {
+        keys.forEach((k) => {
+          if (k.includes('workbox-precache')) {
+            void caches.delete(k);
+          }
+        });
+      });
+    }
+  }
+} catch {
+  // ignore storage errors
+}
+
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
