@@ -13,6 +13,9 @@ export default defineConfig(({ command }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
+          'assets/aistudio/6f509ec934a4_77c9e53d.mp3',
+          'adhan.mp3',
+          'adhan.wav',
           'icon.svg',
           'apple-touch-icon.png',
           'pwa-192x192.png',
@@ -91,7 +94,11 @@ export default defineConfig(({ command }) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+          skipWaiting: true,
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json,wav,mp3}'],
+          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -152,7 +159,7 @@ export default defineConfig(({ command }) => {
           ],
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module',
         },
       }),

@@ -18,6 +18,8 @@ import {
   calculateTawafOrSaiLapInfo,
   calculateInheritance,
   InheritanceInput,
+  calculateComprehensiveZakat,
+  ZakatInput,
 } from '../utils/islamicFeatures';
 import { NearbyMosquesMap } from './NearbyMosquesMap';
 import { MANASIK_CHECKLIST_ITEMS } from '../data/thematicAndNamesData';
@@ -132,6 +134,24 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
     fullSistersCount: 0,
   });
   const [currencyLabel, setCurrencyLabel] = useState<string>('ريال');
+  const [financialToolMode, setFinancialToolMode] = useState<
+    'zakat' | 'inheritance'
+  >('zakat');
+  const [zakatInput, setZakatInput] = useState<ZakatInput>({
+    cashAndSavings: 45000,
+    tradeGoodsAndStocks: 15000,
+    goldGrams24K: 20,
+    goldGrams21K: 40,
+    goldGrams18K: 0,
+    silverGrams: 0,
+    immediateDebts: 5000,
+    goldPricePerGram24K: 315,
+    silverPricePerGram: 3.9,
+    nisabStandard: 'gold_85g',
+    calendarYearType: 'hijri_lunar',
+    familyMembersCount: 5,
+    fitrCostPerPerson: 25,
+  });
 
   const [compassHeading, setCompassHeading] = useState<number>(0);
   const [sensorActive, setSensorActive] = useState<boolean>(false);
@@ -249,6 +269,10 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
     return calculateInheritance(inheritanceInput);
   }, [inheritanceInput]);
 
+  const zakatResult = useMemo(() => {
+    return calculateComprehensiveZakat(zakatInput);
+  }, [zakatInput]);
+
   const handleToggleManasikCheck = (id: string) => {
     setCheckedManasikIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -308,7 +332,7 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>حاسبة المواريث</span>
+          <span>الزكاة والمواريث</span>
         </button>
 
         <button
@@ -858,19 +882,474 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
       )}
 
       {/* =====================================================================
-          SUB-TAB 3: ISLAMIC INHERITANCE CALCULATOR (حاسبة المواريث الشرعية)
+          SUB-TAB 3: ZAKAT & ISLAMIC INHERITANCE CALCULATORS (حاسبة الزكاة والمواريث الشرعية)
          ===================================================================== */}
       {activeSubTab === 'inheritance' && (
-        <div
-          className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start"
-          data-testid="inheritance-calculator-section"
-        >
-          {/* Left 5 Cols: Estate & Heirs Inputs */}
-          <section className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-4">
-            <div className="border-b border-stone-100 pb-3">
-              <h2 className="font-display text-lg sm:text-xl font-bold text-stone-900">
-                بيانات التركة والورثة الشرعيين
+        <div className="space-y-4">
+          {/* Mode Toggle: Zakat Calculator vs Inheritance Calculator */}
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl p-3">
+            <div>
+              <h2 className="font-display text-base sm:text-lg font-bold text-stone-900">
+                الحاسبات المالية الشرعية الموثّقة
               </h2>
+              <p className="text-xs text-stone-600">
+                حساب نصاب الزكاة وربع العشر وزكاة الفطر، وتقسيم المواريث الشرعية وفق كتاب الله وسنة رسوله ﷺ
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 bg-[#F4EFE6] p-1 rounded-xl border border-stone-200">
+              <button
+                type="button"
+                data-testid="switch-to-zakat-btn"
+                onClick={() => setFinancialToolMode('zakat')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                  financialToolMode === 'zakat'
+                    ? 'bg-[#14532D] text-white'
+                    : 'text-stone-700 hover:text-stone-900'
+                }`}
+              >
+                حاسبة الزكاة الشرعية
+              </button>
+              <button
+                type="button"
+                data-testid="switch-to-inheritance-btn"
+                onClick={() => setFinancialToolMode('inheritance')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                  financialToolMode === 'inheritance'
+                    ? 'bg-[#14532D] text-white'
+                    : 'text-stone-700 hover:text-stone-900'
+                }`}
+              >
+                حاسبة المواريث (الفرائض)
+              </button>
+            </div>
+          </div>
+
+          {financialToolMode === 'zakat' ? (
+            <div
+              className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"
+              data-testid="zakat-calculator-section"
+            >
+              {/* Left 6 Cols: Zakat Wealth & Gold/Silver Inputs */}
+              <section className="lg:col-span-6 bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-4">
+                <div className="border-b border-stone-100 pb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-display text-base sm:text-lg font-bold text-stone-900">
+                      بيانات الأموال والذهب وعروض التجارة
+                    </h3>
+                    <p className="text-xs text-stone-600 mt-0.5">
+                      أدخل الأموال المدّخرة التي حال عليها الحول وأوزان الذهب غير المعدّ للزينة المعتادة (أو على القول بوجوبها)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Standard & Year Type */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="block text-xs font-semibold text-stone-700 mb-1">
+                      معيار النصاب الشرعي:
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setZakatInput((prev) => ({
+                            ...prev,
+                            nisabStandard: 'gold_85g',
+                          }))
+                        }
+                        className={`py-1.5 px-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          zakatInput.nisabStandard === 'gold_85g'
+                            ? 'bg-[#14532D] text-white border-[#14532D]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200'
+                        }`}
+                      >
+                        نصاب الذهب (٨٥جم)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setZakatInput((prev) => ({
+                            ...prev,
+                            nisabStandard: 'silver_595g',
+                          }))
+                        }
+                        className={`py-1.5 px-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          zakatInput.nisabStandard === 'silver_595g'
+                            ? 'bg-[#14532D] text-white border-[#14532D]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200'
+                        }`}
+                      >
+                        نصاب الفضة (٥٩٥جم)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-xs font-semibold text-stone-700 mb-1">
+                      نوع الحَوْل (السنة الزكوية):
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setZakatInput((prev) => ({
+                            ...prev,
+                            calendarYearType: 'hijri_lunar',
+                          }))
+                        }
+                        className={`py-1.5 px-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          zakatInput.calendarYearType === 'hijri_lunar'
+                            ? 'bg-[#78350F] text-white border-[#78350F]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200'
+                        }`}
+                      >
+                        هجري قمري (٢.٥٪)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setZakatInput((prev) => ({
+                            ...prev,
+                            calendarYearType: 'gregorian_solar',
+                          }))
+                        }
+                        className={`py-1.5 px-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          zakatInput.calendarYearType === 'gregorian_solar'
+                            ? 'bg-[#78350F] text-white border-[#78350F]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200'
+                        }`}
+                      >
+                        ميلادي شمسي (٢.٥٧٧٪)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cash, Trade Goods, Debts */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label
+                      htmlFor="zakat-cash-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      النقد والأرصدة البنكية
+                    </label>
+                    <input
+                      id="zakat-cash-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.cashAndSavings}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          cashAndSavings: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="zakat-trade-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      عروض التجارة والأسهم
+                    </label>
+                    <input
+                      id="zakat-trade-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.tradeGoodsAndStocks}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          tradeGoodsAndStocks: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="zakat-debts-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      الديون الحالّة (تُخصم)
+                    </label>
+                    <input
+                      id="zakat-debts-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.immediateDebts}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          immediateDebts: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Gold Grams by Karat (24K, 21K, 18K) */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label
+                      htmlFor="zakat-g24-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      ذهب عيار ٢٤ (جرام)
+                    </label>
+                    <input
+                      id="zakat-g24-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.goldGrams24K}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          goldGrams24K: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="zakat-g21-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      ذهب عيار ٢١ (جرام)
+                    </label>
+                    <input
+                      id="zakat-g21-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.goldGrams21K}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          goldGrams21K: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="zakat-g18-input"
+                      className="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      ذهب عيار ١٨ (جرام)
+                    </label>
+                    <input
+                      id="zakat-g18-input"
+                      type="number"
+                      min={0}
+                      value={zakatInput.goldGrams18K}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          goldGrams18K: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full min-h-[38px] px-3 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Gold & Silver Gram Prices + Zakat Al-Fitr Family Members */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-stone-100">
+                  <div>
+                    <label
+                      htmlFor="gold-price-input"
+                      className="block text-[11px] font-semibold text-stone-700 mb-1"
+                    >
+                      سعر جرام ذهب ٢٤
+                    </label>
+                    <input
+                      id="gold-price-input"
+                      type="number"
+                      min={1}
+                      value={zakatInput.goldPricePerGram24K}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          goldPricePerGram24K: Math.max(1, Number(e.target.value) || 1),
+                        }))
+                      }
+                      className="w-full min-h-[36px] px-2.5 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="silver-price-input"
+                      className="block text-[11px] font-semibold text-stone-700 mb-1"
+                    >
+                      سعر جرام الفضة
+                    </label>
+                    <input
+                      id="silver-price-input"
+                      type="number"
+                      min={0.5}
+                      step="0.1"
+                      value={zakatInput.silverPricePerGram}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          silverPricePerGram: Math.max(0.5, Number(e.target.value) || 1),
+                        }))
+                      }
+                      className="w-full min-h-[36px] px-2.5 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="fitr-members-input"
+                      className="block text-[11px] font-semibold text-stone-700 mb-1"
+                    >
+                      أفراد زكاة الفطر
+                    </label>
+                    <input
+                      id="fitr-members-input"
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={zakatInput.familyMembersCount}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          familyMembersCount: Math.max(1, Number(e.target.value) || 1),
+                        }))
+                      }
+                      className="w-full min-h-[36px] px-2.5 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="fitr-cost-input"
+                      className="block text-[11px] font-semibold text-stone-700 mb-1"
+                    >
+                      قيمة صاع الفطر للفرد
+                    </label>
+                    <input
+                      id="fitr-cost-input"
+                      type="number"
+                      min={1}
+                      value={zakatInput.fitrCostPerPerson}
+                      onChange={(e) =>
+                        setZakatInput((prev) => ({
+                          ...prev,
+                          fitrCostPerPerson: Math.max(1, Number(e.target.value) || 25),
+                        }))
+                      }
+                      className="w-full min-h-[36px] px-2.5 py-1 text-xs font-tabular tabular-nums bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Right 6 Cols: Zakat Output Summary & Breakdown */}
+              <section className="lg:col-span-6 bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-4">
+                <div className="border-b border-stone-100 pb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span
+                      className={`text-xs font-bold block ${
+                        zakatResult.isNisabReached
+                          ? 'text-[#14532D]'
+                          : 'text-[#78350F]'
+                      }`}
+                    >
+                      {zakatResult.isNisabReached
+                        ? 'بلغ المال النصاب الشرعي — تجب فيه الزكاة'
+                        : 'لم يبلغ النصاب الشرعي — لا زكاة واجبة'}
+                    </span>
+                    <h3 className="font-display text-base sm:text-lg font-bold text-stone-900">
+                      مقدار الزكاة الواجبة وتفصيل الوعاء الزكوي
+                    </h3>
+                  </div>
+
+                  <div className="px-3.5 py-1.5 rounded-xl bg-[#14532D] text-white text-right">
+                    <span className="text-[10px] text-[#FDE68A] block">
+                      الزكاة الواجبة إخراجها:
+                    </span>
+                    <span
+                      data-testid="zakat-total-due-amount"
+                      className="font-tabular tabular-nums text-base sm:text-lg font-bold"
+                    >
+                      {zakatResult.totalZakatDueAmount.toLocaleString('en-US')}{' '}
+                      {currencyLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-stone-700 leading-relaxed">
+                  {zakatResult.rulingSummaryAr}
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3]">
+                    <span className="text-[11px] text-stone-600 block">
+                      صافي الوعاء الزكوي
+                    </span>
+                    <span className="font-tabular tabular-nums text-sm font-bold text-stone-900">
+                      {zakatResult.netZakatableWealth.toLocaleString('en-US')}{' '}
+                      {currencyLabel}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3]">
+                    <span className="text-[11px] text-stone-600 block">
+                      قيمة النصاب المعتمد
+                    </span>
+                    <span className="font-tabular tabular-nums text-sm font-bold text-[#78350F]">
+                      {zakatResult.activeNisabThresholdAmount.toLocaleString('en-US')}{' '}
+                      {currencyLabel}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3]">
+                    <span className="text-[11px] text-stone-600 block">
+                      الذهب الصافي المكافئ (٢٤)
+                    </span>
+                    <span className="font-tabular tabular-nums text-sm font-bold text-stone-900">
+                      {zakatResult.pureGoldEquivalentGrams} جم (
+                      {zakatResult.goldValuationAmount.toLocaleString('en-US')})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Zakat Al-Fitr Summary Box */}
+                <div className="p-3.5 rounded-xl bg-[#F7F4EE] border border-stone-200 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-xs font-bold text-stone-900 block">
+                      زكاة الفطر للأسرة ({toArabicNumerals(zakatInput.familyMembersCount)} أفراد)
+                    </span>
+                    <span className="text-[11px] text-stone-600">
+                      المقدار النبوي بالوزن: <strong>{zakatResult.zakatAlFitrTotalKg} كجم</strong> من غالب قوت البلد (صاع = ٢.٥ كجم للفرد)
+                    </span>
+                  </div>
+                  <div className="px-3 py-1 rounded-lg bg-white border border-stone-300 font-tabular tabular-nums text-xs font-bold text-[#14532D]">
+                    نقداً: {zakatResult.zakatAlFitrTotalAmount.toLocaleString('en-US')}{' '}
+                    {currencyLabel}
+                  </div>
+                </div>
+
+                <p className="font-quran text-sm text-[#78350F] bg-[#FCF9F2] border border-[#E5DAC3] rounded-xl p-3 leading-relaxed">
+                  {zakatResult.shariahEvidenceAr}
+                </p>
+              </section>
+            </div>
+          ) : (
+            <div
+              className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start"
+              data-testid="inheritance-calculator-section"
+            >
+              {/* Left 5 Cols: Estate & Heirs Inputs */}
+              <section className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-4">
+                <div className="border-b border-stone-100 pb-3">
+                  <h2 className="font-display text-lg sm:text-xl font-bold text-stone-900">
+                    بيانات التركة والورثة الشرعيين
+                  </h2>
               <p className="text-xs text-stone-600 mt-0.5">
                 أدخل صافي التركة بعد سداد الديون وتنفيذ الوصية المشروعة، وحدد الورثة الأحياء
               </p>
@@ -1275,6 +1754,8 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
               ))}
             </div>
           </section>
+        </div>
+          )}
         </div>
       )}
 

@@ -12,6 +12,8 @@ import {
   MASBAHA_PHRASES,
   calculateMasbahaState,
   getPostPrayerTasbihStage,
+  calculateSunnahAndNightWindows,
+  calculateComprehensiveZakat,
 } from './islamicFeatures.ts';
 import { VERIFIED_CITIES } from './astronomy.ts';
 import {
@@ -239,5 +241,57 @@ test('Waqf & Dawah Share Cards: formats dedication line, roundtrips share URL pa
   assert.equal(certPayload.category, 'waqf');
   assert.ok(certPayload.titleAr.includes('والديّ الكريمين رحمهما الله'));
   assert.ok(certPayload.mainArabicText.includes('رب ارحمهما كما ربياني صغيرا'));
+});
+
+test('Astronomical Sunnah & Night Windows: computes Last Third of Night, Islamic Midnight, Duha window, and prohibited windows', () => {
+  // Night from 18:00 (Maghrib) to 04:30 (Fajr) = 10h 30m (630 mins)
+  // 1/3 = 210 mins (3h 30m) -> First third ends 21:30, Midnight 23:15, Last third starts 01:00
+  const windows = calculateSunnahAndNightWindows({
+    fajr: '04:30',
+    sunrise: '06:00',
+    dhuhr: '12:15',
+    asr: '15:30',
+    maghrib: '18:00',
+    currentHours: 2,
+    currentMinutes: 15,
+  });
+
+  assert.equal(windows.nightDurationMinutes, 630);
+  assert.equal(windows.firstThirdEndHHMM, '21:30');
+  assert.equal(windows.islamicMidnightHHMM, '23:15');
+  assert.equal(windows.lastThirdStartHHMM, '01:00');
+  assert.equal(windows.duhaStartHHMM, '06:15');
+  assert.equal(windows.duhaEndHHMM, '12:05');
+  assert.equal(windows.activeStatus.kind, 'last_third');
+  assert.equal(windows.prohibitedWindows.length, 3);
+});
+
+test('Comprehensive Shariah Zakat Calculator: normalizes 21K/18K gold to 24K, evaluates Nisab, and computes 2.5% Zakat & Zakat Al-Fitr', () => {
+  const res = calculateComprehensiveZakat({
+    cashAndSavings: 50000,
+    tradeGoodsAndStocks: 10000,
+    goldGrams24K: 10,
+    goldGrams21K: 24, // 24 * 21/24 = 21g of 24K
+    goldGrams18K: 12, // 12 * 18/24 = 9g of 24K -> total 40g of 24K
+    silverGrams: 0,
+    immediateDebts: 10000,
+    goldPricePerGram24K: 300, // 40g * 300 = 12,000; Gold Nisab = 85 * 300 = 25,500
+    silverPricePerGram: 3.5,
+    nisabStandard: 'gold_85g',
+    calendarYearType: 'hijri_lunar',
+    familyMembersCount: 4,
+    fitrCostPerPerson: 25,
+  });
+
+  assert.equal(res.pureGoldEquivalentGrams, 40);
+  assert.equal(res.goldValuationAmount, 12000);
+  // Gross = 50000 + 10000 + 12000 = 72000; Net = 72000 - 10000 = 62000
+  assert.equal(res.netZakatableWealth, 62000);
+  assert.equal(res.goldNisabThresholdAmount, 25500);
+  assert.equal(res.isNisabReached, true);
+  // 2.5% of 62,000 = 1,550
+  assert.equal(res.totalZakatDueAmount, 1550);
+  assert.equal(res.zakatAlFitrTotalAmount, 100);
+  assert.equal(res.zakatAlFitrTotalKg, 10);
 });
 

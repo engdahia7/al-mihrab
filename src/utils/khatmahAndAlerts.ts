@@ -129,15 +129,21 @@ export interface AlertSoundSpec {
   durationMs: number;
 }
 
+export const PRIMARY_PINNED_ADHAN_URL =
+  '/assets/aistudio/6f509ec934a4_77c9e53d.mp3';
+export const PRIMARY_PINNED_ADHAN_DURATION_SEC = 132;
+export const PRIMARY_PINNED_ADHAN_SIZE_BYTES = 2117341;
+
 export const ALERT_SOUND_OPTIONS: AlertSoundSpec[] = [
   {
     id: 'custom_file',
     nameAr: 'الأذان الشرعي المعتمد',
-    descriptionAr: 'تشغيل صوت الأذان المعتمد مباشرة عند دخول وقت الصلاة بدون إظهار اسم الملف',
+    descriptionAr:
+      'تشغيل صوت الأذان الشرعي الأساسي المثبّت في التطبيق عند دخول وقت الصلاة',
     category: 'custom_audio',
-    audioUrl: './adhan.wav',
+    audioUrl: PRIMARY_PINNED_ADHAN_URL,
     frequenciesHz: [293.66, 440.0, 392.0, 369.99, 293.66],
-    durationMs: 14000,
+    durationMs: PRIMARY_PINNED_ADHAN_DURATION_SEC * 1000,
   },
   {
     id: 'silent',
@@ -169,6 +175,7 @@ export const ADHAN_PHRASES_TIMELINE: AdhanPhraseStep[] = [
   {
     id: 'takbeer_start',
     arabicCall: 'اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ · اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ',
+    arabicText: 'اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ',
     sunnahReplyAr: 'ترديد: «اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ»',
     startRatio: 0,
     endRatio: 0.2,
@@ -176,36 +183,41 @@ export const ADHAN_PHRASES_TIMELINE: AdhanPhraseStep[] = [
   {
     id: 'shahada_tawheed',
     arabicCall: 'أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ (مَرَّتَيْنِ)',
+    arabicText: 'أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ',
     sunnahReplyAr: 'ترديد: «أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ»',
     startRatio: 0.2,
-    endRatio: 0.38,
+    endRatio: 0.36,
   },
   {
     id: 'shahada_rasul',
     arabicCall: 'أَشْهَدُ أَنَّ مُحَمَّدًا رَسُولُ اللَّهِ (مَرَّتَيْنِ)',
+    arabicText: 'أَشْهَدُ أَنَّ مُحَمَّدًا رَسُولُ اللَّهِ',
     sunnahReplyAr: 'ترديد: «أَشْهَدُ أَنَّ مُحَمَّدًا رَسُولُ اللَّهِ»',
-    startRatio: 0.38,
-    endRatio: 0.56,
+    startRatio: 0.36,
+    endRatio: 0.51,
   },
   {
     id: 'hayya_salah',
     arabicCall: 'حَيَّ عَلَى الصَّلَاةِ (مَرَّتَيْنِ)',
+    arabicText: 'حَيَّ عَلَى الصَّلَاةِ',
     sunnahReplyAr: 'السنّة عند الحيعلة: «لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ»',
-    startRatio: 0.56,
-    endRatio: 0.72,
+    startRatio: 0.51,
+    endRatio: 0.68,
   },
   {
     id: 'hayya_falah',
     arabicCall: 'حَيَّ عَلَى الْفَلَاحِ (مَرَّتَيْنِ)',
+    arabicText: 'حَيَّ عَلَى الْفَلَاحِ',
     sunnahReplyAr: 'السنّة عند الحيعلة: «لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ»',
-    startRatio: 0.72,
-    endRatio: 0.86,
+    startRatio: 0.68,
+    endRatio: 0.84,
   },
   {
     id: 'khatm_adhan',
     arabicCall: 'اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ · لَا إِلَٰهَ إِلَّا اللَّهُ',
+    arabicText: 'اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ · لَا إِلَٰهَ إِلَّا اللَّهُ',
     sunnahReplyAr: 'ثم الصلاة على النبي ﷺ وسؤال الوسيلة له (رواه البخاري ٦١٤)',
-    startRatio: 0.86,
+    startRatio: 0.84,
     endRatio: 1.01,
   },
 ];

@@ -13,6 +13,11 @@ import {
   ALERT_SOUND_OPTIONS,
   TOTAL_MUSHAF_PAGES,
 } from './khatmahAndAlerts.ts';
+import {
+  evaluateScheduledNotificationsForMinute,
+  getDefaultPushChannelsConfig,
+  buildTestPushNotification,
+} from './notificationDispatcher.ts';
 
 test('calculateKhatmahStats computes accurate progress, Juz, and daily target pages for 30-day and 15-day plans', () => {
   const stats30 = calculateKhatmahStats({
@@ -128,5 +133,71 @@ test('unified Adhan option and sanitized titles never expose filenames', () => {
   assert.equal(formatAudioFileSizeAr(2.5 * 1024 * 1024), '2.50 ميجابايت');
   assert.equal(formatAudioDurationMMSS(195), '03:15');
 });
+
+test('evaluateScheduledNotificationsForMinute dispatches Adhan, Pre-Adhan, Morning/Evening Adhkar, Last Third, and Friday Kahf notifications', () => {
+  const sampleTimes = {
+    fajr: '05:00',
+    sunrise: '06:15',
+    dhuhr: '12:08',
+    asr: '15:26',
+    maghrib: '17:56',
+    isha: '19:26',
+    midnight: '23:28',
+    lastThird: '01:18',
+  };
+  const configs = getDefaultPrayerAlertsConfig();
+  const channels = getDefaultPushChannelsConfig();
+
+  // 1. Exact Adhan notification plays full Adhan
+  const adhanNotif = evaluateScheduledNotificationsForMinute({
+    currentHHMM: '12:08',
+    todayTimes: sampleTimes,
+    alertsConfig: configs,
+    channelsConfig: channels,
+    cityNameAr: 'مكة المكرمة',
+  });
+  assert.equal(adhanNotif?.category, 'ADHAN');
+  assert.equal(adhanNotif?.shouldPlayFullAdhan, true);
+
+  // 2. Morning Adhkar (sunrise 06:15 + 20m = 06:35)
+  const morningAdhkar = evaluateScheduledNotificationsForMinute({
+    currentHHMM: '06:35',
+    todayTimes: sampleTimes,
+    alertsConfig: configs,
+    channelsConfig: channels,
+    cityNameAr: 'مكة المكرمة',
+  });
+  assert.equal(morningAdhkar?.category, 'ADHKAR_MORNING');
+  assert.equal(morningAdhkar?.actionTab, 'adhkar');
+
+  // 3. Last Third of the Night (01:18)
+  const lastThirdNotif = evaluateScheduledNotificationsForMinute({
+    currentHHMM: '01:18',
+    todayTimes: sampleTimes,
+    alertsConfig: configs,
+    channelsConfig: channels,
+    cityNameAr: 'مكة المكرمة',
+    lastThirdStartHHMM: '01:18',
+  });
+  assert.equal(lastThirdNotif?.category, 'LAST_THIRD');
+
+  // 4. Friday Surah Al-Kahf at 10:00 on Friday
+  const fridayNotif = evaluateScheduledNotificationsForMinute({
+    currentHHMM: '10:00',
+    todayTimes: sampleTimes,
+    alertsConfig: configs,
+    channelsConfig: channels,
+    cityNameAr: 'مكة المكرمة',
+    isFriday: true,
+  });
+  assert.equal(fridayNotif?.category, 'FRIDAY_KAHF');
+  assert.equal(fridayNotif?.mushafPage, 293);
+
+  // 5. Test push notification builder
+  const testNotif = buildTestPushNotification('الرياض', 'العصر', '15:26');
+  assert.equal(testNotif.category, 'TEST');
+  assert.ok(testNotif.titleAr.includes('العصر'));
+});
+
 
 

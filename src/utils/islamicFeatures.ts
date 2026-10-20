@@ -1246,3 +1246,315 @@ export function triggerMasbahaTactileFeedback(options: {
   }
 }
 
+// ============================================================================
+// 8. المواقيت النورانية والسنن اليومية وأوقات النهي (Night Thirds, Duha & Prohibited Windows)
+// ============================================================================
+
+export interface SunnahAndNightWindowsResult {
+  duhaStartHHMM: string;
+  duhaEndHHMM: string;
+  ishraqEndHHMM: string;
+  firstThirdEndHHMM: string;
+  islamicMidnightHHMM: string;
+  lastThirdStartHHMM: string;
+  fajrHHMM: string;
+  nightDurationMinutes: number;
+  prohibitedWindows: {
+    id: 'sunrise' | 'zenith' | 'sunset';
+    titleAr: string;
+    fromHHMM: string;
+    toHHMM: string;
+    hadithNoteAr: string;
+  }[];
+  activeStatus: {
+    kind: 'last_third' | 'duha' | 'prohibited' | 'first_two_thirds' | 'daytime';
+    badgeAr: string;
+    titleAr: string;
+    virtueOrRulingAr: string;
+  };
+}
+
+function parseMinutes(hhmm: string): number {
+  const parts = (hhmm || '00:00').split(':').map(Number);
+  const h = Number.isFinite(parts[0]) ? parts[0] : 0;
+  const m = Number.isFinite(parts[1]) ? parts[1] : 0;
+  return ((h * 60 + m) % 1440 + 1440) % 1440;
+}
+
+function formatMinutesToHHMM(totalMinutes: number): string {
+  const norm = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const h = Math.floor(norm / 60);
+  const m = norm % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function isMinuteWithinRange(target: number, start: number, end: number): boolean {
+  if (start <= end) {
+    return target >= start && target < end;
+  }
+  // Crosses midnight (e.g. 22:00 to 04:30)
+  return target >= start || target < end;
+}
+
+/**
+ * Calculates astronomical Sunnah prayer windows (Ishraq, Duha, Islamic Midnight,
+ * First/Middle/Last Third of the Night from Maghrib to Fajr) and the 3 authentic
+ * prohibited voluntary prayer intervals.
+ */
+export function calculateSunnahAndNightWindows(params: {
+  fajr: string;
+  sunrise: string;
+  dhuhr: string;
+  asr: string;
+  maghrib: string;
+  currentHours?: number;
+  currentMinutes?: number;
+}): SunnahAndNightWindowsResult {
+  const fajrMin = parseMinutes(params.fajr);
+  const sunriseMin = parseMinutes(params.sunrise);
+  const dhuhrMin = parseMinutes(params.dhuhr);
+  const maghribMin = parseMinutes(params.maghrib);
+
+  // Night duration from Maghrib until next Fajr
+  const nightDurationMinutes =
+    fajrMin >= maghribMin
+      ? fajrMin - maghribMin
+      : 1440 - maghribMin + fajrMin;
+
+  const oneThirdMinutes = nightDurationMinutes / 3;
+  const firstThirdEndMin = (maghribMin + oneThirdMinutes) % 1440;
+  const islamicMidnightMin = (maghribMin + nightDurationMinutes / 2) % 1440;
+  const lastThirdStartMin = (maghribMin + oneThirdMinutes * 2) % 1440;
+
+  // Duha window: starts 15 minutes after sunrise (قيد رمح) and ends 10 minutes before Dhuhr (قبيل الزوال)
+  const duhaStartMin = (sunriseMin + 15) % 1440;
+  const ishraqEndMin = (sunriseMin + 35) % 1440;
+  const duhaEndMin = (dhuhrMin - 10 + 1440) % 1440;
+
+  // Prohibited voluntary prayer windows (أوقات النهي الثلاثة المضبوطة)
+  const sunsetProhibitedStartMin = (maghribMin - 15 + 1440) % 1440;
+
+  const prohibitedWindows: SunnahAndNightWindowsResult['prohibitedWindows'] = [
+    {
+      id: 'sunrise',
+      titleAr: 'من طلوع الشمس حتى ترتفع قيد رمح',
+      fromHHMM: formatMinutesToHHMM(sunriseMin),
+      toHHMM: formatMinutesToHHMM(duhaStartMin),
+      hadithNoteAr: 'نحو ١٥ دقيقة بعد الشروق (رواه مسلم ٨٣١)',
+    },
+    {
+      id: 'zenith',
+      titleAr: 'عند قيام الشمس في كبد السماء حتى تزول',
+      fromHHMM: formatMinutesToHHMM(duhaEndMin),
+      toHHMM: formatMinutesToHHMM(dhuhrMin),
+      hadithNoteAr: 'نحو ١٠ دقائق قبيل أذان الظهر (رواه مسلم ٨٣١)',
+    },
+    {
+      id: 'sunset',
+      titleAr: 'عند اصفرار الشمس وميلها للغروب حتى تغرب',
+      fromHHMM: formatMinutesToHHMM(sunsetProhibitedStartMin),
+      toHHMM: formatMinutesToHHMM(maghribMin),
+      hadithNoteAr: 'نحو ١٥ دقيقة قبيل أذان المغرب للنافلة المطلقة',
+    },
+  ];
+
+  const nowMin =
+    typeof params.currentHours === 'number' &&
+    typeof params.currentMinutes === 'number'
+      ? (params.currentHours * 60 + params.currentMinutes) % 1440
+      : 720;
+
+  let activeStatus: SunnahAndNightWindowsResult['activeStatus'];
+
+  if (isMinuteWithinRange(nowMin, lastThirdStartMin, fajrMin)) {
+    activeStatus = {
+      kind: 'last_third',
+      badgeAr: 'الآن: الثلث الأخير من الليل',
+      titleAr: 'وقت التنزّل الإلهي والتهجّد والاستغفار بالأسحار',
+      virtueOrRulingAr:
+        '«يَنْزِلُ رَبُّنَا تَبَارَكَ وَتَعَالَى كُلَّ لَيْلَةٍ إِلَى السَّمَاءِ الدُّنْيَا حِينَ يَبْقَى ثُلُثُ اللَّيْلِ الآخِرُ يَقُولُ: مَنْ يَدْعُونِي فَأَسْتَجِيبَ لَهُ» (متفق عليه)',
+    };
+  } else if (isMinuteWithinRange(nowMin, duhaStartMin, duhaEndMin)) {
+    activeStatus = {
+      kind: 'duha',
+      badgeAr: 'الآن: وقت صلاة الضحى (الأوابين)',
+      titleAr: 'وقت صلاة الإشراق والضحى مفتوح الآن',
+      virtueOrRulingAr:
+        '«يُصْبِحُ عَلَى كُلِّ سُلَامَى مِنْ أَحَدِكُمْ صَدَقَةٌ... وَيُجْزِئُ مِنْ ذَلِكَ رَكْعَتَانِ يَرْكَعُهُمَا مِنَ الضُّحَى» (رواه مسلم ٧٢٠)',
+    };
+  } else if (
+    isMinuteWithinRange(nowMin, sunriseMin, duhaStartMin) ||
+    isMinuteWithinRange(nowMin, duhaEndMin, dhuhrMin) ||
+    isMinuteWithinRange(nowMin, sunsetProhibitedStartMin, maghribMin)
+  ) {
+    activeStatus = {
+      kind: 'prohibited',
+      badgeAr: 'تنبيه فقهي: وقت نهي عن النافلة المطلقة',
+      titleAr: 'يُمسك الآن عن التطوع المطلق بالصلاة حتى يدخل الوقت التالي',
+      virtueOrRulingAr:
+        'يُشرع في هذا الوقت الذكر والاستغفار وتلاوة القرآن، وتجوز الفرائض المقضية وذوات الأسباب على القول الراجح.',
+    };
+  } else if (isMinuteWithinRange(nowMin, maghribMin, lastThirdStartMin)) {
+    activeStatus = {
+      kind: 'first_two_thirds',
+      badgeAr: 'أول الليل وأوسطه',
+      titleAr: `يبدأ الثلث الأخير من الليل الساعة ${formatMinutesToHHMM(lastThirdStartMin)}`,
+      virtueOrRulingAr: `منتصف الليل الشرعي الساعة ${formatMinutesToHHMM(islamicMidnightMin)} — يمتد وقت العشاء الاختياري والقيام.`,
+    };
+  } else {
+    activeStatus = {
+      kind: 'daytime',
+      badgeAr: 'أوقات النهار المباركة',
+      titleAr: `يبدأ الثلث الأخير من الليل القادم الساعة ${formatMinutesToHHMM(lastThirdStartMin)}`,
+      virtueOrRulingAr:
+        'حافظ على السنن الرواتب الاثنتي عشرة ركعة وأذكار ما بعد الصلوات المفروضة.',
+    };
+  }
+
+  return {
+    duhaStartHHMM: formatMinutesToHHMM(duhaStartMin),
+    duhaEndHHMM: formatMinutesToHHMM(duhaEndMin),
+    ishraqEndHHMM: formatMinutesToHHMM(ishraqEndMin),
+    firstThirdEndHHMM: formatMinutesToHHMM(firstThirdEndMin),
+    islamicMidnightHHMM: formatMinutesToHHMM(islamicMidnightMin),
+    lastThirdStartHHMM: formatMinutesToHHMM(lastThirdStartMin),
+    fajrHHMM: formatMinutesToHHMM(fajrMin),
+    nightDurationMinutes,
+    prohibitedWindows,
+    activeStatus,
+  };
+}
+
+// ============================================================================
+// 9. حاسبة الزكاة الشرعية الشاملة (المال، الذهب والفضة، التجارة، وزكاة الفطر)
+// ============================================================================
+
+export interface ZakatInput {
+  cashAndSavings: number;
+  tradeGoodsAndStocks: number;
+  goldGrams24K: number;
+  goldGrams21K: number;
+  goldGrams18K: number;
+  silverGrams: number;
+  immediateDebts: number;
+  goldPricePerGram24K: number;
+  silverPricePerGram: number;
+  nisabStandard: 'gold_85g' | 'silver_595g';
+  calendarYearType: 'hijri_lunar' | 'gregorian_solar';
+  familyMembersCount: number;
+  fitrCostPerPerson: number;
+}
+
+export interface ZakatCalculationResult {
+  pureGoldEquivalentGrams: number;
+  goldValuationAmount: number;
+  silverValuationAmount: number;
+  grossZakatableWealth: number;
+  netZakatableWealth: number;
+  goldNisabThresholdAmount: number;
+  silverNisabThresholdAmount: number;
+  activeNisabThresholdAmount: number;
+  isNisabReached: boolean;
+  zakatRatePercent: number;
+  totalZakatDueAmount: number;
+  zakatAlFitrTotalAmount: number;
+  zakatAlFitrTotalKg: number;
+  rulingSummaryAr: string;
+  shariahEvidenceAr: string;
+}
+
+export const GOLD_NISAB_GRAMS_24K = 85;
+export const SILVER_NISAB_GRAMS = 595;
+export const SA_WEIGHT_KG = 2.5; // الصاع النبوي يقدر بنحو 2.5 كجم من غالب قوت البلد
+
+/**
+ * Calculates comprehensive Shariah Zakat across cash, trade goods, multi-karat gold
+ * (24K, 21K, 18K normalized to 24K pure gold), silver, minus immediate debts,
+ * plus Zakat Al-Fitr (in both weight Kg and cash equivalent).
+ */
+export function calculateComprehensiveZakat(
+  input: ZakatInput
+): ZakatCalculationResult {
+  const safeCash = Math.max(0, input.cashAndSavings || 0);
+  const safeTrade = Math.max(0, input.tradeGoodsAndStocks || 0);
+  const safeG24 = Math.max(0, input.goldGrams24K || 0);
+  const safeG21 = Math.max(0, input.goldGrams21K || 0);
+  const safeG18 = Math.max(0, input.goldGrams18K || 0);
+  const safeSilverG = Math.max(0, input.silverGrams || 0);
+  const safeDebts = Math.max(0, input.immediateDebts || 0);
+
+  const goldPrice24 = Math.max(1, input.goldPricePerGram24K || 310);
+  const silverPrice = Math.max(0.5, input.silverPricePerGram || 3.8);
+
+  // Convert 21K (21/24 = 0.875) and 18K (18/24 = 0.75) to pure 24K equivalent grams
+  const pureGoldEquivalentGrams =
+    safeG24 + safeG21 * (21 / 24) + safeG18 * (18 / 24);
+  const goldValuationAmount = pureGoldEquivalentGrams * goldPrice24;
+  const silverValuationAmount = safeSilverG * silverPrice;
+
+  const grossZakatableWealth =
+    safeCash + safeTrade + goldValuationAmount + silverValuationAmount;
+  const netZakatableWealth = Math.max(0, grossZakatableWealth - safeDebts);
+
+  const goldNisabThresholdAmount = GOLD_NISAB_GRAMS_24K * goldPrice24;
+  const silverNisabThresholdAmount = SILVER_NISAB_GRAMS * silverPrice;
+
+  const activeNisabThresholdAmount =
+    input.nisabStandard === 'silver_595g'
+      ? silverNisabThresholdAmount
+      : goldNisabThresholdAmount;
+
+  const isNisabReached =
+    netZakatableWealth >= activeNisabThresholdAmount &&
+    activeNisabThresholdAmount > 0;
+
+  // Hijri lunar year rate is 2.5% (ربع العشر); Gregorian solar year is 2.577% (365/354.36 * 2.5%)
+  const zakatRatePercent =
+    input.calendarYearType === 'gregorian_solar' ? 2.577 : 2.5;
+
+  const totalZakatDueAmount = isNisabReached
+    ? (netZakatableWealth * zakatRatePercent) / 100
+    : 0;
+
+  const safeFamilyCount = Math.max(1, Math.round(input.familyMembersCount || 1));
+  const safeFitrCost = Math.max(0, input.fitrCostPerPerson || 25);
+  const zakatAlFitrTotalAmount = safeFamilyCount * safeFitrCost;
+  const zakatAlFitrTotalKg = safeFamilyCount * SA_WEIGHT_KG;
+
+  const rulingSummaryAr = isNisabReached
+    ? `بلغ صافي مالك النصاب الشرعي المعتمد (${Math.round(
+        activeNisabThresholdAmount
+      ).toLocaleString('en-US')}) وحال عليه الحول، فتجب فيه الزكاة بنسبة ${
+        zakatRatePercent === 2.5 ? '٢.٥٪ (ربع العشر)' : '٢.٥٧٧٪ (للسنة الميلادية)'
+      }.`
+    : `صافي الوعاء الزكوي بعد خصم الديون (${Math.round(
+        netZakatableWealth
+      ).toLocaleString(
+        'en-US'
+      )}) لم يبلغ النصاب الشرعي (${Math.round(
+        activeNisabThresholdAmount
+      ).toLocaleString('en-US')})، فلا زكاة واجبة فيه، وتُستحب الصدقة التطوعية.`;
+
+  const shariahEvidenceAr =
+    'قال الله تعالى: ﴿خُذْ مِنْ أَمْوَالِهِمْ صَدَقَةً تُطَهِّرُهُمْ وَتُزَكِّيهِمْ بِهَا﴾ [التوبة: ١٠٣]، وقال ﷺ: «لَيْسَ فِيمَا دُونَ خَمْسِ أَوَاقٍ صَدَقَةٌ» (متفق عليه)، ونصاب الذهب عشرون مثقالاً (٨٥ جراماً عيار ٢٤)، ونصاب الفضة مئتا درهم (٥٩٥ جراماً).';
+
+  return {
+    pureGoldEquivalentGrams: Number(pureGoldEquivalentGrams.toFixed(2)),
+    goldValuationAmount: Math.round(goldValuationAmount),
+    silverValuationAmount: Math.round(silverValuationAmount),
+    grossZakatableWealth: Math.round(grossZakatableWealth),
+    netZakatableWealth: Math.round(netZakatableWealth),
+    goldNisabThresholdAmount: Math.round(goldNisabThresholdAmount),
+    silverNisabThresholdAmount: Math.round(silverNisabThresholdAmount),
+    activeNisabThresholdAmount: Math.round(activeNisabThresholdAmount),
+    isNisabReached,
+    zakatRatePercent,
+    totalZakatDueAmount: Math.round(totalZakatDueAmount * 100) / 100,
+    zakatAlFitrTotalAmount: Math.round(zakatAlFitrTotalAmount),
+    zakatAlFitrTotalKg: Number(zakatAlFitrTotalKg.toFixed(1)),
+    rulingSummaryAr,
+    shariahEvidenceAr,
+  };
+}
+
+

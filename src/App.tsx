@@ -8,6 +8,10 @@ import {
   MapPin,
   Share2,
   Check,
+  Search,
+  Bell,
+  VolumeX,
+  X,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -28,6 +32,7 @@ import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
 import { DawahCardModal } from './components/DawahCardModal';
+import { GlobalSearchModal } from './components/GlobalSearchModal';
 import {
   WidgetSizePreset,
   WidgetThemeId,
@@ -42,6 +47,12 @@ import {
   type WaqfDedicationConfig,
   type DawahShareCardPayload,
 } from './utils/dawahShareCards';
+import {
+  subscribePushNotifications,
+  dismissActivePushBanner,
+  type DispatchedIslamicNotification,
+} from './utils/notificationDispatcher';
+import { stopActiveAdhanAudio } from './utils/soundPlayer';
 
 export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
 
@@ -206,6 +217,26 @@ export default function App() {
     payload: null,
     mode: 'card',
   });
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
+  const [activePushBanner, setActivePushBanner] =
+    useState<DispatchedIslamicNotification | null>(null);
+
+  useEffect(() => {
+    return subscribePushNotifications((active) => {
+      setActivePushBanner(active);
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsGlobalSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const handleSaveWaqfConfig = (next: WaqfDedicationConfig) => {
     setWaqfConfig(next);
@@ -347,30 +378,46 @@ export default function App() {
       {/* Top Bar: 3-Zone Desktop Contract + Compact Mobile App Header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 md:gap-8 px-3.5 sm:px-8 h-14 sm:h-16">
-          {/* Zone 1: Brand Wordmark + Combined Slogan */}
+          {/* Zone 1: Official Al-Mihrab Logo + Brand Wordmark + Combined Slogan */}
           <a
             href="#top"
             onClick={(e) => {
               e.preventDefault();
               handleSelectTab('prayers');
             }}
-            className="flex flex-col justify-center shrink-0 group"
+            className="flex items-center gap-2.5 shrink-0 group"
           >
-            <div className="flex items-center gap-2">
-              <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap group-hover:text-[#14532D] transition-colors">
-                المحراب
-              </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
-                في محراب الطاعة · لوجه الله
+            <img
+              src="/icon.svg"
+              alt="شعار المحراب"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-xs border border-[#14532D]/20 shrink-0"
+            />
+            <div className="flex flex-col justify-center">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap group-hover:text-[#14532D] transition-colors">
+                  المحراب
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
+                  في محراب الطاعة · لوجه الله
+                </span>
+              </div>
+              <span className="text-[10px] sm:text-xs text-stone-600 font-medium leading-tight mt-0.5 whitespace-nowrap">
+                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله.. لا تنسونا من صالح دعائكم
               </span>
             </div>
-            <span className="text-[10px] sm:text-xs text-stone-600 font-medium leading-tight mt-0.5 whitespace-nowrap">
-              نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله.. لا تنسونا من صالح دعائكم
-            </span>
           </a>
 
-          {/* Mobile Left Slot: Active City & Offline Storage / PWA Install */}
+          {/* Mobile Left Slot: Global Search, Active City & Offline Storage / PWA Install */}
           <div className="flex md:hidden items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="mobile-global-search-btn"
+              onClick={() => setIsGlobalSearchOpen(true)}
+              aria-label="البحث الشامل في المحراب"
+              className="p-1.5 rounded-lg bg-[#F7F4EE] border border-stone-200 text-stone-700 hover:text-[#14532D] cursor-pointer"
+            >
+              <Search className="w-4 h-4 text-[#14532D]" />
+            </button>
             <OfflineAndPWAHub />
             <button
               type="button"
@@ -416,12 +463,118 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Zone 3 (Desktop): Offline Storage Manager & PWA Install */}
+          {/* Zone 3 (Desktop): Global Search + Offline Storage Manager & PWA Install */}
           <div className="hidden md:flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="desktop-global-search-btn"
+              onClick={() => setIsGlobalSearchOpen(true)}
+              className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/70 border border-stone-200 text-xs font-semibold text-stone-800 flex items-center gap-1.5 cursor-pointer"
+              title="البحث الشامل في القرآن والأذكار والأدعية والأدوات (Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-[#14532D]" />
+              <span>بحث شامل</span>
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white border border-stone-300 rounded text-stone-500">
+                ⌘K
+              </kbd>
+            </button>
             <OfflineAndPWAHub />
           </div>
         </div>
       </header>
+
+      {/* Top-of-Phone Heads-Up Push Notification Card with Official Al-Mihrab Logo */}
+      {activePushBanner && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="global-push-notification-banner"
+          className="fixed top-2.5 inset-x-2.5 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[120] rounded-2xl bg-[#14532D] text-[#FBF9F5] border-2 border-[#FDE68A]/60 shadow-2xl p-3.5 sm:p-4 space-y-2.5"
+        >
+          {/* Top Phone Notification Header: App Logo + App Name + Timestamp + Close */}
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/15">
+            <div className="flex items-center gap-2">
+              <img
+                src="/icon.svg"
+                alt="شعار برنامج المحراب"
+                data-testid="notification-app-logo"
+                className="w-7 h-7 rounded-lg border border-[#FDE68A]/50 shadow-xs shrink-0 bg-[#14532D]"
+              />
+              <span className="font-display text-xs font-bold text-[#FDE68A]">
+                المحراب · في محراب الطاعة
+              </span>
+              <span className="text-[10px] text-[#D6CEBE] bg-black/25 px-2 py-0.5 rounded-md font-tabular">
+                الآن · {activePushBanner.timestampHHMM}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              aria-label="إغلاق الإشعار"
+              onClick={() => {
+                stopActiveAdhanAudio();
+                dismissActivePushBanner();
+              }}
+              className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-stone-200 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Notification Body with Large App Icon & Content */}
+          <div className="flex items-start gap-3">
+            <img
+              src="/pwa-192x192.png"
+              alt="لوجو المحراب"
+              className="w-11 h-11 rounded-xl border border-[#FDE68A]/40 shadow-sm shrink-0 mt-0.5"
+            />
+            <div className="space-y-1 min-w-0 flex-1">
+              <h4 className="font-display text-sm sm:text-base font-bold text-white leading-snug">
+                {activePushBanner.titleAr}
+              </h4>
+              <p className="text-xs text-stone-200 leading-relaxed">
+                {activePushBanner.bodyAr}
+              </p>
+              {activePushBanner.subtitleOrHadithAr && (
+                <p className="text-[11px] font-quran text-[#FDE68A] leading-relaxed bg-black/20 px-2.5 py-1.5 rounded-xl border border-white/10">
+                  {activePushBanner.subtitleOrHadithAr}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Notification Action Buttons */}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            {activePushBanner.shouldPlayFullAdhan && (
+              <button
+                type="button"
+                onClick={() => stopActiveAdhanAudio()}
+                className="min-h-[32px] px-3 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+                <span>إيقاف الأذان</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (activePushBanner.mushafPage) {
+                  setTargetMushafPage(activePushBanner.mushafPage);
+                }
+                handleSelectTab(activePushBanner.actionTab);
+                dismissActivePushBanner();
+              }}
+              className="min-h-[32px] px-3.5 py-1 rounded-xl bg-[#FDE68A] text-stone-950 text-xs font-bold hover:bg-[#FDE68A]/90 transition-colors cursor-pointer"
+            >
+              {activePushBanner.actionLabelAr}
+            </button>
+          </div>
+
+          {/* Bottom Handle Pill (iOS / Android Heads-Up Indicator) */}
+          <div className="w-10 h-1 rounded-full bg-white/30 mx-auto" />
+        </div>
+      )}
 
       {/* Persistent 24/7 Live Quran Radio Player (Continues playing in background across tabs) */}
       <div className={activeTab === 'quran' ? 'hidden' : 'block'}>
@@ -635,6 +788,19 @@ export default function App() {
         waqfConfig={waqfConfig}
         onSaveWaqfConfig={handleSaveWaqfConfig}
         initialMode={dawahModalState.mode}
+      />
+
+      {/* Global Command & Multi-Domain Search Modal (Ctrl+K / Cmd+K) */}
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        onNavigateTab={handleSelectTab}
+        onOpenMushafPage={(pageNum) => {
+          setTargetMushafPage(pageNum);
+          handleSelectTab('quran');
+        }}
+        onOpenDawahCard={handleOpenDawahCard}
+        onOpenWaqfModal={handleOpenWaqfModal}
       />
     </div>
   );

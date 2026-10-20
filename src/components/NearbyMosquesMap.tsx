@@ -424,6 +424,10 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
   const [travelMode, setTravelMode] = useState<'walking' | 'driving'>('walking');
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [focusRouteKey, setFocusRouteKey] = useState<number>(0);
+  const [sdkFallbackActive, setSdkFallbackActive] = useState<boolean>(!apiKey);
+  const [mapViewMode, setMapViewMode] = useState<'sdk' | 'direct_embed'>(
+    apiKey ? 'sdk' : 'direct_embed'
+  );
 
   const [mosques, setMosques] = useState<NearbyMosque[]>([]);
   const [selectedMosqueId, setSelectedMosqueId] = useState<string | null>(null);
@@ -443,6 +447,21 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
     }),
     [selectedCity.latitude, selectedCity.longitude]
   );
+
+  useEffect(() => {
+    const handleFallback = () => {
+      setSdkFallbackActive(true);
+      setMapViewMode('direct_embed');
+      setIsSearching(false);
+      setIsRouting(false);
+    };
+    window.addEventListener('gmp-map-fallback', handleFallback);
+    window.addEventListener('gmp-quota-exceeded', handleFallback);
+    return () => {
+      window.removeEventListener('gmp-map-fallback', handleFallback);
+      window.removeEventListener('gmp-quota-exceeded', handleFallback);
+    };
+  }, []);
 
   useEffect(() => {
     setPinnedMapMosque(null);
@@ -704,6 +723,41 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Mobile-Ready Map Display Mode Switcher */}
+        {apiKey && !sdkFallbackActive && (
+          <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
+            <span className="text-[11px] text-stone-500">
+              نمط عرض الخريطة على الهاتف:
+            </span>
+            <div className="flex items-center gap-1 bg-[#FBF9F5] border border-stone-200 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setMapViewMode('sdk')}
+                data-testid="map-mode-sdk-btn"
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                  mapViewMode === 'sdk'
+                    ? 'bg-[#14532D] text-white'
+                    : 'text-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                الخريطة الذكية (SDK)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapViewMode('direct_embed')}
+                data-testid="map-mode-embed-btn"
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                  mapViewMode === 'direct_embed'
+                    ? 'bg-[#14532D] text-white'
+                    : 'text-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                خريطة المساجد المباشرة للهاتف
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Interactive Google Map Container (Explicit Height per CF2) */}
@@ -711,7 +765,7 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
         className="h-[340px] sm:h-[390px] w-full rounded-xl overflow-hidden border border-stone-200 relative bg-stone-100"
         data-testid="google-map-container"
       >
-        {apiKey ? (
+        {apiKey && mapViewMode === 'sdk' && !sdkFallbackActive ? (
           <APIProvider apiKey={apiKey} language="ar" region="SA">
             <Map
               defaultCenter={userCoords}
@@ -838,12 +892,24 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
             </Map>
           </APIProvider>
         ) : (
-          <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center space-y-2">
-            <MapPin className="w-8 h-8 text-stone-400" />
-            <p className="text-sm font-bold text-stone-700">
-              جاري تهيئة مفتاح خرائط جوجل التفاعلية...
-            </p>
-          </div>
+          <iframe
+            key={`embed-${userCoords.lat}-${userCoords.lng}-${activeSearchQuery}-${selectedMosque?.id || 'all'}-${refreshKey}`}
+            title={`خريطة المساجد المحيطة — ${selectedCity.nameAr}`}
+            data-testid="google-maps-live-embed"
+            src={
+              selectedMosque
+                ? `https://maps.google.com/maps?q=${encodeURIComponent(
+                    `${selectedMosque.nameAr}`
+                  )}&ll=${selectedMosque.latitude},${selectedMosque.longitude}&hl=ar&z=16&output=embed`
+                : `https://maps.google.com/maps?q=${encodeURIComponent(
+                    activeSearchQuery || 'مسجد'
+                  )}&ll=${userCoords.lat},${userCoords.lng}&spn=0.03,0.03&hl=ar&z=15&output=embed`
+            }
+            className="w-full h-full border-0"
+            loading="eager"
+            referrerPolicy="no-referrer-when-downgrade"
+            allowFullScreen
+          />
         )}
 
         {/* Loading Badge Overlay */}

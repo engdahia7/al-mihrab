@@ -34,6 +34,7 @@ import {
   subscribeAdhanPlaybackState,
   getAdhanPlaybackState,
   AdhanPlaybackState,
+  syncAndPinExistingAdhanAudio,
 } from '../utils/soundPlayer';
 import { PrayerAlertsPanel } from './PrayerAlertsPanel';
 import { TravelerModePanel } from './TravelerModePanel';
@@ -42,6 +43,12 @@ import {
   detectUserLocation,
   EXTENDED_ARAB_AND_WORLD_CITIES,
 } from '../utils/geolocationService';
+import { calculateSunnahAndNightWindows } from '../utils/islamicFeatures';
+import {
+  evaluateScheduledNotificationsForMinute,
+  dispatchSystemAndInAppNotification,
+  loadPushChannelsConfig,
+} from '../utils/notificationDispatcher';
 
 const ALERTS_STORAGE_KEY = 'almihrab_prayer_alerts_v1';
 
@@ -108,6 +115,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
   const [lastTriggeredMinute, setLastTriggeredMinute] = useState<string>('');
 
   useEffect(() => {
+    syncAndPinExistingAdhanAudio().catch(() => {});
     return subscribeAdhanPlaybackState((st) => setPlaybackState(st));
   }, []);
 
@@ -141,6 +149,19 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
   const hijriDate = useMemo(() => {
     return gregorianToHijri(now, hijriAdjustment);
   }, [now, hijriAdjustment]);
+
+  const sunnahWindows = useMemo(() => {
+    return calculateSunnahAndNightWindows({
+      fajr: todayTimes.fajr,
+      sunrise: todayTimes.sunrise,
+      dhuhr: todayTimes.dhuhr,
+      asr: todayTimes.asr,
+      maghrib: todayTimes.maghrib,
+      currentHours: now.getHours(),
+      currentMinutes: now.getMinutes(),
+    });
+  }, [todayTimes, now]);
+  const [showProhibitedDetails, setShowProhibitedDetails] = useState<boolean>(false);
 
   const qiblaAngle = useMemo(() => {
     return calculateQiblaDirection(
@@ -251,26 +272,34 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
 
   const currentMethodSpec = CALCULATION_METHODS[methodId];
 
-  // Automatically trigger Adhan audio when current HH:MM matches an enabled alert
+  // Automatically trigger Push Notifications & Adhan audio when current HH:MM matches an enabled schedule
   useEffect(() => {
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     const currentHHMM = `${hh}:${mm}`;
     if (now.getSeconds() === 0 && currentHHMM !== lastTriggeredMinute) {
-      const activeTrigger = checkActivePrayerAlert(
+      const scheduledNotif = evaluateScheduledNotificationsForMinute({
+        currentHHMM,
         todayTimes,
         alertsConfig,
-        currentHHMM
-      );
-      if (activeTrigger) {
+        channelsConfig: loadPushChannelsConfig(),
+        cityNameAr: selectedCity.nameAr,
+        lastThirdStartHHMM: sunnahWindows.lastThirdStartHHMM,
+        isFriday: now.getDay() === 5,
+      });
+      if (scheduledNotif) {
         setLastTriggeredMinute(currentHHMM);
-        const prayerMeta = PRAYER_METADATA.find(
-          (p) => p.key === activeTrigger.prayerKey
-        );
-        playAlertSoundTone(activeTrigger.soundId, prayerMeta?.nameAr);
+        dispatchSystemAndInAppNotification(scheduledNotif).catch(() => {});
       }
     }
-  }, [now, todayTimes, alertsConfig, lastTriggeredMinute]);
+  }, [
+    now,
+    todayTimes,
+    alertsConfig,
+    lastTriggeredMinute,
+    selectedCity.nameAr,
+    sunnahWindows.lastThirdStartHHMM,
+  ]);
 
   const handleHeroPlayAdhan = () => {
     if (playbackState.isPlaying) {
@@ -544,6 +573,123 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         </div>
       </section>
 
+      {/* 2B. Astronomical Night Thirds, Duha Window & Prohibited Times Strip */}
+      <section
+        aria-label="المواقيت النورانية والسنن اليومية"
+        data-testid="sunnah-night-windows-section"
+        className="bg-white border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+                sunnahWindows.activeStatus.kind === 'last_third'
+                  ? 'bg-[#14532D] text-[#FDE68A]'
+                  : sunnahWindows.activeStatus.kind === 'duha'
+                  ? 'bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25'
+                  : sunnahWindows.activeStatus.kind === 'prohibited'
+                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                  : 'bg-[#F7F4EE] text-[#78350F] border border-stone-200'
+              }`}
+            >
+              {sunnahWindows.activeStatus.badgeAr}
+            </span>
+            <h2 className="text-xs sm:text-sm font-bold text-stone-900">
+              {sunnahWindows.activeStatus.titleAr}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowProhibitedDetails((prev) => !prev)}
+            className="text-[11px] font-semibold text-[#78350F] hover:underline cursor-pointer"
+          >
+            {showProhibitedDetails
+              ? 'إخفاء أوقات النهي الثلاثة'
+              : 'عرض أوقات النهي عن النافلة (٣)'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* Card 1: Last Third of the Night */}
+          <div
+            data-testid="night-last-third-card"
+            className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3] flex items-center justify-between gap-2"
+          >
+            <div>
+              <span className="text-[11px] font-bold text-[#14532D] block">
+                الثلث الأخير من الليل (التهجّد والأسحار)
+              </span>
+              <span className="text-[10px] text-stone-600 block mt-0.5">
+                يمتد حتى أذان الفجر ({sunnahWindows.fajrHHMM})
+              </span>
+            </div>
+            <span className="font-tabular tabular-nums text-base sm:text-lg font-bold text-[#14532D] whitespace-nowrap">
+              {sunnahWindows.lastThirdStartHHMM}
+            </span>
+          </div>
+
+          {/* Card 2: Duha & Ishraq Prayer Window */}
+          <div
+            data-testid="duha-window-card"
+            className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3] flex items-center justify-between gap-2"
+          >
+            <div>
+              <span className="text-[11px] font-bold text-[#78350F] block">
+                وقت صلاة الضحى والإشراق (الأوابين)
+              </span>
+              <span className="text-[10px] text-stone-600 block mt-0.5">
+                من ارتفاع الشمس قيد رمح إلى قبيل الزوال
+              </span>
+            </div>
+            <span className="font-tabular tabular-nums text-sm sm:text-base font-bold text-stone-900 whitespace-nowrap">
+              {sunnahWindows.duhaStartHHMM} – {sunnahWindows.duhaEndHHMM}
+            </span>
+          </div>
+
+          {/* Card 3: Shariah Islamic Midnight */}
+          <div
+            data-testid="islamic-midnight-card"
+            className="p-3 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3] flex items-center justify-between gap-2"
+          >
+            <div>
+              <span className="text-[11px] font-bold text-stone-800 block">
+                منتصف الليل الشرعي
+              </span>
+              <span className="text-[10px] text-stone-600 block mt-0.5">
+                نهاية الثلث الأول: {sunnahWindows.firstThirdEndHHMM}
+              </span>
+            </div>
+            <span className="font-tabular tabular-nums text-base sm:text-lg font-bold text-stone-900 whitespace-nowrap">
+              {sunnahWindows.islamicMidnightHHMM}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-stone-600 leading-relaxed">
+          {sunnahWindows.activeStatus.virtueOrRulingAr}
+        </p>
+
+        {showProhibitedDetails && (
+          <div className="pt-2 border-t border-stone-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {sunnahWindows.prohibitedWindows.map((pw) => (
+              <div
+                key={pw.id}
+                className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-0.5"
+              >
+                <div className="flex items-center justify-between gap-2 text-xs font-bold text-amber-950">
+                  <span>{pw.titleAr}</span>
+                  <span className="font-tabular tabular-nums whitespace-nowrap">
+                    {pw.fromHHMM} – {pw.toHHMM}
+                  </span>
+                </div>
+                <p className="text-[10px] text-amber-900">{pw.hadithNoteAr}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* 3. Concise 3-Tab Sub-Screen Switcher (No duplicate prayer clocks on default view) */}
       <div
         role="tablist"
@@ -617,6 +763,9 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           todayTimes={todayTimes}
           alertsConfig={alertsConfig}
           onChangeAlertsConfig={setAlertsConfig}
+          cityNameAr={selectedCity.nameAr}
+          nextPrayerNameAr={nextPrayerInfo.nextPrayerNameAr}
+          nextPrayerTime={nextPrayerInfo.nextPrayerTime}
         />
       )}
 

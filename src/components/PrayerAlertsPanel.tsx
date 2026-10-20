@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bell,
   Volume2,
   VolumeX,
   CheckCircle2,
   BellRing,
-  Upload,
   Play,
   Pause,
   Square,
+  Send,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import {
   DailyPrayerTimes,
@@ -19,6 +21,7 @@ import {
   PrayerAlertItemConfig,
   getAdhanPhraseForProgress,
   formatAudioDurationMMSS,
+  DUA_AFTER_ADHAN_AR,
 } from '../utils/khatmahAndAlerts';
 import {
   playAlertSoundTone,
@@ -29,10 +32,17 @@ import {
   subscribeAdhanPlaybackState,
   getAdhanPlaybackState,
   AdhanPlaybackState,
-  CustomAdhanFileMeta,
-  getCustomAdhanFileMeta,
-  saveCustomAdhanAudioFile,
+  syncAndPinExistingAdhanAudio,
 } from '../utils/soundPlayer';
+import {
+  PushNotificationChannelsConfig,
+  loadPushChannelsConfig,
+  savePushChannelsConfig,
+  getBrowserNotificationPermissionState,
+  requestAndVerifyPushPermission,
+  buildTestPushNotification,
+  dispatchSystemAndInAppNotification,
+} from '../utils/notificationDispatcher';
 
 interface PrayerAlertsPanelProps {
   todayTimes: DailyPrayerTimes;
@@ -40,52 +50,108 @@ interface PrayerAlertsPanelProps {
   onChangeAlertsConfig: React.Dispatch<
     React.SetStateAction<Record<MainPrayerKey, PrayerAlertItemConfig>>
   >;
+  cityNameAr?: string;
+  nextPrayerNameAr?: string;
+  nextPrayerTime?: string;
 }
+
+const PUSH_CHANNEL_ITEMS: {
+  key: keyof PushNotificationChannelsConfig;
+  titleAr: string;
+  descAr: string;
+}[] = [
+  {
+    key: 'adhanPush',
+    titleAr: 'إشعار دخول وقت الصلاة والأذان',
+    descAr: 'دفع إشعار فوري مع تشغيل الأذان الأساسي المثبّت عند حلول الوقت',
+  },
+  {
+    key: 'preAdhanPush',
+    titleAr: 'التذكير قبل الأذان (الاستعداد والوضوء)',
+    descAr: 'تنبيه استباقي قبل دخول وقت الصلاة بالدقائق المحددة لكل فرض',
+  },
+  {
+    key: 'iqamahPush',
+    titleAr: 'تذكير الإقامة والسنن الرواتب والضحى',
+    descAr: 'إشعار بعد الأذان للتذكير بالإقامة والسنن الرواتب وصلاة الإشراق',
+  },
+  {
+    key: 'adhkarPush',
+    titleAr: 'إشعارات أذكار الصباح والمساء',
+    descAr: 'تذكير يومي في وقت الشروق وبعد العصر لتلاوة حصن المسلم',
+  },
+  {
+    key: 'lastThirdPush',
+    titleAr: 'منبّه الثلث الأخير من الليل (التهجّد)',
+    descAr: 'إشعار عند بدء الثلث الأخير من الليل لقيام الليل والوتر والدعاء',
+  },
+  {
+    key: 'fridayKahfPush',
+    titleAr: 'سنن يوم الجمعة (سورة الكهف والصلاة على النبي ﷺ)',
+    descAr: 'تذكير صباح كل جمعة بقراءة سورة الكهف والإكثار من الصلاة على النبي ﷺ',
+  },
+];
 
 export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
   todayTimes,
   alertsConfig,
   onChangeAlertsConfig,
+  cityNameAr = 'مكة المكرمة',
+  nextPrayerNameAr = 'القادمة',
+  nextPrayerTime = '--:--',
 }) => {
   const [testAlertBanner, setTestAlertBanner] = useState<string | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<string>(
-    typeof window !== 'undefined' && 'Notification' in window
-      ? Notification.permission
-      : 'unsupported'
-  );
+  const [notificationPermission, setNotificationPermission] = useState<
+    'granted' | 'denied' | 'default' | 'unsupported'
+  >(() => getBrowserNotificationPermissionState());
 
-  const [customFileMeta, setCustomFileMeta] =
-    useState<CustomAdhanFileMeta | null>(() => getCustomAdhanFileMeta());
-  const [isUploadingAudio, setIsUploadingAudio] = useState<boolean>(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [channelsConfig, setChannelsConfig] =
+    useState<PushNotificationChannelsConfig>(() => loadPushChannelsConfig());
+
   const [playbackState, setPlaybackState] = useState<AdhanPlaybackState>(() =>
     getAdhanPlaybackState()
   );
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   useEffect(() => {
-    return subscribeAdhanPlaybackState((state) => {
-      setPlaybackState(state);
+    let mounted = true;
+    syncAndPinExistingAdhanAudio().catch(() => {});
+    const unsub = subscribeAdhanPlaybackState((state) => {
+      if (mounted) setPlaybackState(state);
     });
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, []);
 
-  const handleRequestBrowserNotification = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setTestAlertBanner(
-        'التنبيه الصوتي للأذان يعمل مباشرة داخل التطبيق في أوقات الصلوات.'
-      );
-      return;
-    }
-    try {
-      const perm = await Notification.requestPermission();
-      setNotificationPermission(perm);
-      if (perm === 'granted') {
-        setTestAlertBanner('تم تفعيل إشعارات المتصفح لمواقيت الصلاة بنجاح.');
-      }
-    } catch {
-      // ignore
-    }
+  const handleToggleChannel = (key: keyof PushNotificationChannelsConfig) => {
+    setChannelsConfig((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      savePushChannelsConfig(updated);
+      return updated;
+    });
+  };
+
+  const handleEnablePushNotifications = async () => {
+    const res = await requestAndVerifyPushPermission(
+      cityNameAr,
+      nextPrayerNameAr,
+      nextPrayerTime
+    );
+    setNotificationPermission(res.permissionState);
+    setTestAlertBanner(res.statusMessageAr);
+  };
+
+  const handleSendTestPush = async () => {
+    const testNotif = buildTestPushNotification(
+      cityNameAr,
+      nextPrayerNameAr,
+      nextPrayerTime
+    );
+    await dispatchSystemAndInAppNotification(testNotif);
+    setTestAlertBanner(
+      `تم دفع إشعار تجريبي فوري لمدينة ${cityNameAr} (صلاة ${nextPrayerNameAr} الساعة ${nextPrayerTime}).`
+    );
   };
 
   const handleTogglePrayerEnabled = (key: MainPrayerKey) => {
@@ -100,89 +166,121 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
     }));
   };
 
-  const handleUploadFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadError(null);
-    setIsUploadingAudio(true);
+  const handleChangeBeforeMinutes = (key: MainPrayerKey, minutes: number) => {
+    onChangeAlertsConfig((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        beforeMinutes: minutes,
+      },
+    }));
+  };
 
-    try {
-      const meta = await saveCustomAdhanAudioFile(file);
-      setCustomFileMeta(meta);
-      onChangeAlertsConfig((prev) => {
-        const updated = { ...prev };
-        (Object.keys(updated) as MainPrayerKey[]).forEach((k) => {
-          updated[k] = {
-            ...updated[k],
-            soundId: 'custom_file',
-          };
-        });
-        return updated;
-      });
-      setTestAlertBanner('تم تحديث صوت الأذان وتفعيله لجميع الصلوات.');
-      await playAlertSoundTone('custom_file', 'الصلاة');
-    } catch {
-      setUploadError('تعذّر قراءة الملف الصوتي. يرجى اختيار ملف صوتي صالح.');
-    } finally {
-      setIsUploadingAudio(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
+  const handleChangeAfterMinutes = (key: MainPrayerKey, minutes: number) => {
+    onChangeAlertsConfig((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        afterMinutes: minutes,
+      },
+    }));
   };
 
   const handlePlayAdhan = (prayerLabelAr?: string) => {
-    playAlertSoundTone('custom_file', prayerLabelAr);
+    const pName = prayerLabelAr || nextPrayerNameAr || 'الصلاة';
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    dispatchSystemAndInAppNotification({
+      id: `adhan-preview-${Date.now()}`,
+      category: 'ADHAN',
+      titleAr: prayerLabelAr
+        ? `حان الآن موعد أذان ${prayerLabelAr}`
+        : 'الأذان الشرعي المعتمد — المحراب',
+      bodyAr: `حسب التوقيت المحلي لمدينة ${cityNameAr} — حيّ على الصلاة، حيّ على الفلاح.`,
+      subtitleOrHadithAr: DUA_AFTER_ADHAN_AR,
+      timestampHHMM: `${hh}:${mm}`,
+      createdAtMs: Date.now(),
+      shouldPlayFullAdhan: true,
+      prayerNameAr: pName,
+      actionTab: 'prayers',
+      actionLabelAr: 'عرض المواقيت',
+    }).catch(() => {
+      playAlertSoundTone('custom_file', prayerLabelAr);
+    });
     setTestAlertBanner(
       prayerLabelAr
-        ? `جاري تشغيل أذان صلاة ${prayerLabelAr}`
-        : 'جاري تشغيل الأذان الشرعي'
+        ? `جاري تشغيل أذان صلاة ${prayerLabelAr} مع إشعار أعلى الهاتف`
+        : 'جاري تشغيل الأذان الشرعي المعتمد مع إشعار أعلى الهاتف'
     );
   };
 
-  const activeProgressPercent =
+  const activeProgressRatio =
     playbackState.durationSec > 0
       ? Math.min(
-          100,
-          Math.round(
-            (playbackState.currentTimeSec / playbackState.durationSec) * 100
-          )
+          1,
+          Math.max(0, playbackState.currentTimeSec / playbackState.durationSec)
         )
       : 0;
 
-  const activePhrase = getAdhanPhraseForProgress(activeProgressPercent);
+  const activePhrase = getAdhanPhraseForProgress(activeProgressRatio);
 
   return (
     <section
       id="adhan-audio-studio"
       aria-labelledby="prayer-alerts-heading"
-      className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4"
+      className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-5"
     >
-      {/* Compact Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Compact Header & Push Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-[#14532D]" />
           <h3
             id="prayer-alerts-heading"
             className="font-display text-base sm:text-lg font-bold text-stone-900"
           >
-            مشغّل الأذان وتنبيهات الصلوات
+            دفع الإشعارات ومشغّل الأذان المعتمد
           </h3>
+          <span
+            data-testid="push-permission-badge"
+            className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 ${
+              notificationPermission === 'granted'
+                ? 'bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/25'
+                : 'bg-[#FCF9F2] text-[#78350F] border border-[#E5DAC3]'
+            }`}
+          >
+            <ShieldCheck className="w-3 h-3" />
+            <span>
+              {notificationPermission === 'granted'
+                ? 'إشعارات النظام مفعّلة'
+                : 'إشعارات فورية مفعّلة'}
+            </span>
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {notificationPermission !== 'granted' &&
-            notificationPermission !== 'unsupported' && (
-              <button
-                type="button"
-                onClick={handleRequestBrowserNotification}
-                className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 bg-[#F7F4EE] hover:bg-stone-200/70 border border-stone-300 rounded-xl transition-colors cursor-pointer"
-              >
-                إشعارات المتصفح
-              </button>
-            )}
+          {notificationPermission !== 'granted' && (
+            <button
+              type="button"
+              data-testid="enable-push-notifications-btn"
+              onClick={handleEnablePushNotifications}
+              className="min-h-[34px] px-3 py-1 text-xs font-semibold text-[#14532D] bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/30 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>تفعيل دفع الإشعارات للنظام</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            data-testid="send-test-push-btn"
+            onClick={handleSendTestPush}
+            className="min-h-[34px] px-3 py-1 text-xs font-semibold text-stone-800 bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-300 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5 text-[#78350F]" />
+            <span>إرسال إشعار تجريبي</span>
+          </button>
+
           <button
             type="button"
             data-testid="test-alert-btn"
@@ -195,25 +293,6 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
         </div>
       </div>
 
-      {/* Hidden File Input for Updating Adhan Audio */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac"
-        onChange={handleUploadFileChange}
-        className="hidden"
-        data-testid="adhan-file-input"
-      />
-
-      {uploadError && (
-        <div
-          role="alert"
-          className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800"
-        >
-          {uploadError}
-        </div>
-      )}
-
       {testAlertBanner && (
         <div
           role="status"
@@ -221,7 +300,11 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
           className="p-2.5 rounded-xl bg-[#14532D]/10 border border-[#14532D]/30 text-xs text-stone-800 flex items-center justify-between gap-3"
         >
           <div className="flex items-center gap-2">
-            <Volume2 className="w-4 h-4 text-[#14532D] shrink-0" />
+            <img
+              src="/icon.svg"
+              alt="لوجو المحراب"
+              className="w-5 h-5 rounded-md shrink-0"
+            />
             <span className="font-medium">{testAlertBanner}</span>
           </div>
           <button
@@ -237,7 +320,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
         </div>
       )}
 
-      {/* Interactive Adhan Audio Player */}
+      {/* Locked Primary Adhan Audio Player (Immutable & Permanent) */}
       <div
         data-testid="custom-adhan-status-card"
         className="rounded-2xl bg-[#14532D] text-[#FBF9F5] p-4 border border-[#14532D] space-y-3"
@@ -279,52 +362,41 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
             )}
 
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-display text-base font-bold text-white">
                   {playbackState.activeLabelAr || 'الأذان الشرعي المعتمد'}
                 </span>
-                <span className="text-[11px] text-[#FDE68A] flex items-center gap-1">
+                <span
+                  data-testid="adhan-pinned-badge"
+                  className="text-[11px] bg-[#FDE68A]/20 text-[#FDE68A] px-2 py-0.5 rounded-md border border-[#FDE68A]/40 flex items-center gap-1 font-semibold"
+                >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>مفعّل</span>
+                  <span>الأذان الأساسي المعتمد · مثبّت دائماً</span>
                 </span>
               </div>
-              {customFileMeta && (
-                <p className="text-[11px] text-[#D6CEBE]">
-                  المدة: {formatAudioDurationMMSS(customFileMeta.durationSeconds)}
-                </p>
-              )}
+              <p className="text-[11px] text-[#D6CEBE] mt-0.5">
+                صوت الأذان الرسمي لجميع الصلوات المفروضة · المدة:{' '}
+                {formatAudioDurationMMSS(playbackState.durationSec)}
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 bg-black/20 px-2.5 py-1 rounded-xl border border-white/10">
-              {playbackState.volume === 0 ? (
-                <VolumeX className="w-3.5 h-3.5 text-[#D6CEBE]" />
-              ) : (
-                <Volume2 className="w-3.5 h-3.5 text-[#FDE68A]" />
-              )}
-              <input
-                type="range"
-                aria-label="مستوى صوت الأذان"
-                min={0}
-                max={1}
-                step={0.05}
-                value={playbackState.volume}
-                onChange={(e) => setActiveAdhanVolume(Number(e.target.value))}
-                className="w-16 accent-[#FDE68A] cursor-pointer"
-              />
-            </div>
-
-            <button
-              type="button"
-              data-testid="upload-custom-adhan-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingAudio}
-              className="min-h-[32px] px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>{isUploadingAudio ? 'جاري التحديث...' : 'تغيير الصوت'}</span>
-            </button>
+          <div className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">
+            {playbackState.volume === 0 ? (
+              <VolumeX className="w-3.5 h-3.5 text-[#D6CEBE]" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5 text-[#FDE68A]" />
+            )}
+            <input
+              type="range"
+              aria-label="مستوى صوت الأذان"
+              min={0}
+              max={1}
+              step={0.05}
+              value={playbackState.volume}
+              onChange={(e) => setActiveAdhanVolume(Number(e.target.value))}
+              className="w-20 accent-[#FDE68A] cursor-pointer"
+            />
           </div>
         </div>
 
@@ -335,7 +407,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
             aria-label="شريط تقدم صوت الأذان"
             data-testid="adhan-seek-slider"
             min={0}
-            max={playbackState.durationSec > 0 ? playbackState.durationSec : 100}
+            max={playbackState.durationSec > 0 ? playbackState.durationSec : 132}
             step={0.1}
             value={playbackState.currentTimeSec}
             onChange={(e) => seekActiveAdhanAudio(Number(e.target.value))}
@@ -345,7 +417,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
             <span>{formatAudioDurationMMSS(playbackState.currentTimeSec)}</span>
             <span className="font-quran text-xs text-[#FDE68A]">
               {playbackState.isPlaying || playbackState.isPaused
-                ? `﴿ ${activePhrase.arabicText} ﴾`
+                ? `﴿ ${activePhrase.arabicCall || activePhrase.arabicText || 'اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ'} ﴾`
                 : '﴿ اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ ﴾'}
             </span>
             <span>{formatAudioDurationMMSS(playbackState.durationSec)}</span>
@@ -353,8 +425,64 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
         </div>
       </div>
 
-      {/* Clean 6-Card Prayer Toggle Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      {/* Smart Push Notification Channels Grid */}
+      <div
+        data-testid="push-channels-grid"
+        className="bg-[#FBF9F5] border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-[#78350F]" />
+            <h4 className="text-xs sm:text-sm font-bold text-stone-900">
+              قنوات دفع الإشعارات والتذكيرات الآلية
+            </h4>
+          </div>
+          <span className="text-[11px] text-stone-500">
+            تعمل تلقائياً في أوقاتها الشرعية
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {PUSH_CHANNEL_ITEMS.map((ch) => {
+            const isOn = channelsConfig[ch.key];
+            return (
+              <div
+                key={ch.key}
+                data-testid={`push-channel-${ch.key}`}
+                className={`p-3 rounded-xl border transition-colors flex items-start justify-between gap-2.5 ${
+                  isOn
+                    ? 'bg-white border-[#14532D]/35'
+                    : 'bg-stone-100/70 border-stone-200 opacity-75'
+                }`}
+              >
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-stone-900 block">
+                    {ch.titleAr}
+                  </span>
+                  <span className="text-[10px] text-stone-600 block mt-0.5 leading-relaxed">
+                    {ch.descAr}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid={`toggle-channel-${ch.key}`}
+                  onClick={() => handleToggleChannel(ch.key)}
+                  className={`shrink-0 min-h-[28px] px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                    isOn
+                      ? 'bg-[#14532D] text-white'
+                      : 'bg-stone-200 text-stone-700'
+                  }`}
+                >
+                  {isOn ? 'مفعّل' : 'موقوف'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 6-Card Prayer Alert Timing & Toggle Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {PRAYER_METADATA.map((meta) => {
           const cfg = alertsConfig[meta.key];
           const timeStr = todayTimes[meta.key];
@@ -375,6 +503,53 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
                   {timeStr}
                 </span>
               </div>
+
+              {cfg.enabled && (
+                <div className="space-y-1.5 pt-1 border-t border-stone-200/70 text-[10px] text-stone-600">
+                  <div className="flex items-center justify-between gap-1">
+                    <span>قبل الأذان:</span>
+                    <select
+                      aria-label={`التنبيه قبل أذان ${meta.nameAr}`}
+                      value={cfg.beforeMinutes}
+                      onChange={(e) =>
+                        handleChangeBeforeMinutes(
+                          meta.key,
+                          Number(e.target.value)
+                        )
+                      }
+                      className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
+                    >
+                      <option value={0}>بدون</option>
+                      <option value={5}>٥ د</option>
+                      <option value={10}>١٠ د</option>
+                      <option value={15}>١٥ د</option>
+                      <option value={20}>٢٠ د</option>
+                      <option value={30}>٣٠ د</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span>الإقامة:</span>
+                    <select
+                      aria-label={`تذكير إقامة ${meta.nameAr}`}
+                      value={cfg.afterMinutes}
+                      onChange={(e) =>
+                        handleChangeAfterMinutes(
+                          meta.key,
+                          Number(e.target.value)
+                        )
+                      }
+                      className="bg-white border border-stone-300 rounded px-1 py-0.5 text-[10px] font-semibold text-stone-800 cursor-pointer"
+                    >
+                      <option value={0}>بدون</option>
+                      <option value={5}>٥ د</option>
+                      <option value={10}>١٠ د</option>
+                      <option value={15}>١٥ د</option>
+                      <option value={20}>٢٠ د</option>
+                      <option value={30}>٣٠ د</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-1">
                 <button
