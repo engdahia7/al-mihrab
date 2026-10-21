@@ -21,6 +21,7 @@ import {
   countEnabledPushChannels,
   areAllPushChannelsEnabled,
   buildChannelSpecificNotification,
+  getUpcomingScheduledNotificationInfo,
 } from './notificationDispatcher.ts';
 
 test('calculateKhatmahStats computes accurate progress, Juz, and daily target pages for 30-day and 15-day plans', () => {
@@ -227,6 +228,28 @@ test('setAllPushChannelsState and buildChannelSpecificNotification handle bulk t
   });
   assert.equal(kahfNotif.category, 'FRIDAY_KAHF');
   assert.equal(kahfNotif.mushafPage, 293);
+
+  const sampleTimes = {
+    fajr: '05:00',
+    sunrise: '06:15',
+    dhuhr: '12:08',
+    asr: '15:26',
+    maghrib: '17:56',
+    isha: '19:26',
+    midnight: '23:28',
+    lastThird: '01:18',
+  };
+  const upcoming = getUpcomingScheduledNotificationInfo({
+    currentHours: 11,
+    currentMinutes: 40,
+    todayTimes: sampleTimes,
+    alertsConfig: getDefaultPrayerAlertsConfig(),
+    channelsConfig: allOn,
+    lastThirdStartHHMM: '01:18',
+  });
+  assert.notEqual(upcoming, null);
+  assert.equal(upcoming?.timeHHMM, '11:58');
+  assert.equal(upcoming?.remainingMinutes, 18);
 });
 
 

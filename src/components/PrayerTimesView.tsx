@@ -294,7 +294,8 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     const currentHHMM = `${hh}:${mm}`;
-    if (now.getSeconds() === 0 && currentHHMM !== lastTriggeredMinute) {
+    if (currentHHMM !== lastTriggeredMinute) {
+      setLastTriggeredMinute(currentHHMM);
       const scheduledNotif = evaluateScheduledNotificationsForMinute({
         currentHHMM,
         todayTimes,
@@ -305,7 +306,6 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         isFriday: now.getDay() === 5,
       });
       if (scheduledNotif) {
-        setLastTriggeredMinute(currentHHMM);
         dispatchSystemAndInAppNotification(scheduledNotif).catch(() => {});
       }
     }
@@ -323,7 +323,24 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
       stopActiveAdhanAudio();
       return;
     }
-    playAlertSoundTone('custom_file', nextPrayerInfo.nextPrayerNameAr);
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    dispatchSystemAndInAppNotification({
+      id: `hero-adhan-${Date.now()}`,
+      category: 'ADHAN',
+      titleAr: `حان الآن موعد أذان ${nextPrayerInfo.nextPrayerNameAr} (${nextPrayerInfo.nextPrayerTime})`,
+      bodyAr: `حسب التوقيت المحلي لمدينة ${selectedCity.nameAr} — حيّ على الصلاة، حيّ على الفلاح.`,
+      subtitleOrHadithAr:
+        'اللَّهُمَّ رَبَّ هَذِهِ الدَّعْوَةِ التَّامَّةِ، وَالصَّلَاةِ القَائِمَةِ، آتِ مُحَمَّداً الوَسِيلَةَ وَالفَضِيلَةَ، وَابْعَثْهُ مَقَاماً مَحْمُوداً الَّذِي وَعَدْتَهُ',
+      timestampHHMM: `${hh}:${mm}`,
+      createdAtMs: Date.now(),
+      shouldPlayFullAdhan: true,
+      prayerNameAr: nextPrayerInfo.nextPrayerNameAr,
+      actionTab: 'prayers',
+      actionLabelAr: 'عرض المواقيت',
+    }).catch(() => {
+      playAlertSoundTone('custom_file', nextPrayerInfo.nextPrayerNameAr);
+    });
   };
 
   return (

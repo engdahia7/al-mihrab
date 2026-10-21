@@ -415,6 +415,132 @@ export function evaluateScheduledNotificationsForMinute(params: {
   return null;
 }
 
+export interface UpcomingScheduledNotificationInfo {
+  titleAr: string;
+  timeHHMM: string;
+  remainingMinutes: number;
+  category: NotificationCategory;
+}
+
+/**
+ * Computes the next scheduled automatic notification across today's enabled channels and prayers
+ */
+export function getUpcomingScheduledNotificationInfo(params: {
+  currentHours: number;
+  currentMinutes: number;
+  todayTimes: DailyPrayerTimes;
+  alertsConfig: Record<MainPrayerKey, PrayerAlertItemConfig>;
+  channelsConfig: PushNotificationChannelsConfig;
+  lastThirdStartHHMM?: string;
+}): UpcomingScheduledNotificationInfo | null {
+  const {
+    currentHours,
+    currentMinutes,
+    todayTimes,
+    alertsConfig,
+    channelsConfig,
+    lastThirdStartHHMM,
+  } = params;
+
+  const nowTotalMins = currentHours * 60 + currentMinutes;
+  const candidates: {
+    titleAr: string;
+    timeHHMM: string;
+    targetMins: number;
+    category: NotificationCategory;
+  }[] = [];
+
+  for (const meta of PRAYER_METADATA) {
+    const cfg = alertsConfig[meta.key];
+    if (!cfg || !cfg.enabled) continue;
+    const baseMins = parseTimeHHMMToMinutes(todayTimes[meta.key]);
+
+    if (channelsConfig.preAdhanPush && cfg.beforeMinutes > 0) {
+      const preMins = (baseMins - cfg.beforeMinutes + 1440) % 1440;
+      candidates.push({
+        titleAr: `تنبيه قبل أذان ${meta.nameAr} (${cfg.beforeMinutes} د)`,
+        timeHHMM: formatMinutesToHHMM(preMins),
+        targetMins: preMins,
+        category: 'PRE_ADHAN',
+      });
+    }
+
+    if (channelsConfig.adhanPush && cfg.atAdhan && meta.key !== 'sunrise') {
+      candidates.push({
+        titleAr: `أذان صلاة ${meta.nameAr}`,
+        timeHHMM: todayTimes[meta.key],
+        targetMins: baseMins,
+        category: 'ADHAN',
+      });
+    }
+
+    if (channelsConfig.iqamahPush && cfg.afterMinutes > 0) {
+      const postMins = (baseMins + cfg.afterMinutes) % 1440;
+      candidates.push({
+        titleAr:
+          meta.key === 'sunrise'
+            ? 'تذكير صلاة الإشراق والضحى'
+            : `تذكير إقامة صلاة ${meta.nameAr}`,
+        timeHHMM: formatMinutesToHHMM(postMins),
+        targetMins: postMins,
+        category: 'IQAMAH',
+      });
+    }
+  }
+
+  if (channelsConfig.adhkarPush) {
+    const morningMins = (parseTimeHHMMToMinutes(todayTimes.sunrise) + 20) % 1440;
+    candidates.push({
+      titleAr: 'تذكير أذكار الصباح',
+      timeHHMM: formatMinutesToHHMM(morningMins),
+      targetMins: morningMins,
+      category: 'ADHKAR_MORNING',
+    });
+
+    const eveningMins = (parseTimeHHMMToMinutes(todayTimes.asr) + 25) % 1440;
+    candidates.push({
+      titleAr: 'تذكير أذكار المساء',
+      timeHHMM: formatMinutesToHHMM(eveningMins),
+      targetMins: eveningMins,
+      category: 'ADHKAR_EVENING',
+    });
+  }
+
+  if (channelsConfig.lastThirdPush && lastThirdStartHHMM) {
+    const ltMins = parseTimeHHMMToMinutes(lastThirdStartHHMM);
+    candidates.push({
+      titleAr: 'منبّه الثلث الأخير من الليل',
+      timeHHMM: lastThirdStartHHMM,
+      targetMins: ltMins,
+      category: 'LAST_THIRD',
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  let best: (typeof candidates)[0] | null = null;
+  let bestDelta = Infinity;
+
+  for (const c of candidates) {
+    let delta = c.targetMins - nowTotalMins;
+    if (delta <= 0) {
+      delta += 1440;
+    }
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = c;
+    }
+  }
+
+  if (!best) return null;
+  return {
+    titleAr: best.titleAr,
+    timeHHMM: best.timeHHMM,
+    remainingMinutes: bestDelta,
+    category: best.category,
+  };
+}
+
 export function buildTestPushNotification(
   cityNameAr: string,
   nextPrayerNameAr: string,
@@ -440,6 +566,7 @@ export function buildTestPushNotification(
 }
 
 let activeBannerNotification: DispatchedIslamicNotification | null = null;
+let activeBannerTimeoutId: number | null = null;
 const notificationSubscribers = new Set<
   (active: DispatchedIslamicNotification | null, history: DispatchedIslamicNotification[]) => void
 >();
@@ -490,12 +617,20 @@ export function subscribePushNotifications(
 }
 
 export function dismissActivePushBanner(): void {
+  if (typeof window !== 'undefined' && activeBannerTimeoutId !== null) {
+    window.clearTimeout(activeBannerTimeoutId);
+    activeBannerTimeoutId = null;
+  }
   activeBannerNotification = null;
   notifySubscribers();
 }
 
 export function clearPushNotificationHistory(): void {
   if (typeof window !== 'undefined') {
+    if (activeBannerTimeoutId !== null) {
+      window.clearTimeout(activeBannerTimeoutId);
+      activeBannerTimeoutId = null;
+    }
     try {
       localStorage.removeItem(PUSH_HISTORY_STORAGE_KEY);
     } catch {
@@ -507,7 +642,7 @@ export function clearPushNotificationHistory(): void {
 }
 
 /**
- * Plays a gentle two-note warm chime for non-Adhan notifications (Pre-Adhan, Adhkar, Test)
+ * Plays a gentle three-note warm chime for non-Adhan notifications (Pre-Adhan, Adhkar, Test)
  */
 export function playGentleNotificationChime(): void {
   if (typeof window === 'undefined') return;
@@ -525,6 +660,9 @@ export function playGentleNotificationChime(): void {
         .webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx.currentTime;
     const notes = [528, 660, 792];
     notes.forEach((freq, idx) => {
@@ -534,7 +672,7 @@ export function playGentleNotificationChime(): void {
       const start = now + idx * 0.11;
       osc.frequency.setValueAtTime(freq, start);
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.exponentialRampToValueAtTime(0.14, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.025);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.36);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -543,7 +681,7 @@ export function playGentleNotificationChime(): void {
     });
     window.setTimeout(() => {
       ctx.close().catch(() => {});
-    }, 850);
+    }, 900);
   } catch {
     // ignore Web Audio restrictions
   }
@@ -566,6 +704,18 @@ export async function dispatchSystemAndInAppNotification(
   activeBannerNotification = notification;
   notifySubscribers();
 
+  if (typeof window !== 'undefined') {
+    if (activeBannerTimeoutId !== null) {
+      window.clearTimeout(activeBannerTimeoutId);
+    }
+    activeBannerTimeoutId = window.setTimeout(() => {
+      if (activeBannerNotification?.id === notification.id) {
+        activeBannerNotification = null;
+        notifySubscribers();
+      }
+    }, 18000);
+  }
+
   if (notification.shouldPlayFullAdhan) {
     playAlertSoundTone('custom_file', notification.prayerNameAr);
   } else {
@@ -574,18 +724,28 @@ export async function dispatchSystemAndInAppNotification(
 
   if (typeof window === 'undefined') return;
 
+  // If browser Notification permission is still 'default', request it opportunistically
+  if ('Notification' in window && Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission();
+    } catch {
+      // ignore
+    }
+  }
+
   // Attempt native Service Worker / System Notification at top of phone if granted
   if ('Notification' in window && Notification.permission === 'granted') {
     const resolvedPngLogo = new URL(
       'pwa-192x192.png',
       window.location.origin + '/'
     ).href;
-    const options: NotificationOptions & {
+    const fullBody = `${notification.bodyAr}\n${notification.subtitleOrHadithAr}`;
+    const swOptions: NotificationOptions & {
       renotify?: boolean;
       vibrate?: number[];
       requireInteraction?: boolean;
     } = {
-      body: `${notification.bodyAr}\n${notification.subtitleOrHadithAr}`,
+      body: fullBody,
       dir: 'rtl',
       lang: 'ar',
       icon: resolvedPngLogo,
@@ -596,6 +756,14 @@ export async function dispatchSystemAndInAppNotification(
       vibrate: [200, 100, 200],
     };
 
+    const basicOptions: NotificationOptions = {
+      body: fullBody,
+      dir: 'rtl',
+      lang: 'ar',
+      icon: resolvedPngLogo,
+      tag: notification.id,
+    };
+
     const systemTitle = `المحراب · ${notification.titleAr}`;
 
     let deliveredViaSW = false;
@@ -603,8 +771,13 @@ export async function dispatchSystemAndInAppNotification(
       try {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg && typeof reg.showNotification === 'function') {
-          await reg.showNotification(systemTitle, options);
-          deliveredViaSW = true;
+          try {
+            await reg.showNotification(systemTitle, swOptions);
+            deliveredViaSW = true;
+          } catch {
+            await reg.showNotification(systemTitle, basicOptions);
+            deliveredViaSW = true;
+          }
         }
       } catch {
         // fall through to window.Notification
@@ -613,7 +786,7 @@ export async function dispatchSystemAndInAppNotification(
 
     if (!deliveredViaSW) {
       try {
-        new Notification(systemTitle, options);
+        new Notification(systemTitle, basicOptions);
       } catch {
         // ignore illegal constructor on mobile without SW
       }
@@ -640,59 +813,50 @@ export async function requestAndVerifyPushPermission(
   permissionState: 'granted' | 'denied' | 'default' | 'unsupported';
   statusMessageAr: string;
 }> {
+  const testNotif = buildTestPushNotification(
+    cityNameAr,
+    nextPrayerNameAr,
+    nextPrayerTime
+  );
+
+  // Immediately show the in-app heads-up push banner & play chime before awaiting OS dialog
+  // so the user ALWAYS gets instant visual & audio feedback even if OS dialog is blocked by iframe
+  await dispatchSystemAndInAppNotification(testNotif);
+
   if (typeof window === 'undefined' || !('Notification' in window)) {
-    const testNotif = buildTestPushNotification(
-      cityNameAr,
-      nextPrayerNameAr,
-      nextPrayerTime
-    );
-    await dispatchSystemAndInAppNotification(testNotif);
     return {
       permissionState: 'unsupported',
       statusMessageAr:
-        'تم تفعيل نظام دفع الإشعارات الفورية داخل التطبيق بنجاح (إشعارات النظام الخارجي غير مدعومة في هذا المتصفح).',
+        'تم تفعيل وإرسال إشعار المحراب الفوري أعلى الشاشة مع التنبيه الصوتي بنجاح.',
     };
   }
 
   try {
     const perm = await Notification.requestPermission();
-    const testNotif = buildTestPushNotification(
-      cityNameAr,
-      nextPrayerNameAr,
-      nextPrayerTime
-    );
-    await dispatchSystemAndInAppNotification(testNotif);
-
     if (perm === 'granted') {
       return {
         permissionState: 'granted',
         statusMessageAr:
-          'تم تفعيل دفع إشعارات النظام والمتصفح والتطبيق بنجاح وإرسال إشعار تأكيدي.',
+          'تم تفعيل دفع إشعارات النظام والتطبيق بنجاح وإرسال إشعار تأكيدي الآن أعلى الشاشة.',
       };
     }
     if (perm === 'denied') {
       return {
         permissionState: 'denied',
         statusMessageAr:
-          'تم تفعيل الإشعارات الفورية والصوتية داخل التطبيق (لإظهار إشعارات النظام على قفل الشاشة يرجى السماح بالإشعارات من إعدادات المتصفح).',
+          'تم إرسال الإشعار الفوري والصوتي داخل التطبيق بنجاح (لتفعيل إشعارات قفل الشاشة الخارجية يرجى السماح بالإشعارات من إعدادات المتصفح).',
       };
     }
     return {
       permissionState: 'default',
       statusMessageAr:
-        'تم تفعيل الإشعارات الفورية داخل التطبيق وإرسال تنبيه تجريبي بنجاح.',
+        'تم تفعيل الإشعارات الفورية داخل التطبيق وإرسال إشعار تجريبي أعلى الشاشة بنجاح.',
     };
   } catch {
-    const testNotif = buildTestPushNotification(
-      cityNameAr,
-      nextPrayerNameAr,
-      nextPrayerTime
-    );
-    await dispatchSystemAndInAppNotification(testNotif);
     return {
       permissionState: getBrowserNotificationPermissionState(),
       statusMessageAr:
-        'تم تفعيل دفع الإشعارات الفورية والصوتية داخل التطبيق بنجاح.',
+        'تم تفعيل وإرسال إشعار المحراب الفوري والصوتي أعلى الشاشة بنجاح.',
     };
   }
 }

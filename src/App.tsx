@@ -50,9 +50,15 @@ import {
 import {
   subscribePushNotifications,
   dismissActivePushBanner,
+  requestAndVerifyPushPermission,
+  evaluateScheduledNotificationsForMinute,
+  loadPushChannelsConfig,
+  dispatchSystemAndInAppNotification,
   type DispatchedIslamicNotification,
 } from './utils/notificationDispatcher';
+import { getDefaultPrayerAlertsConfig } from './utils/khatmahAndAlerts';
 import { stopActiveAdhanAudio } from './utils/soundPlayer';
+import type { PrayersSubScreen } from './components/PrayerTimesView';
 
 export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
 
@@ -218,6 +224,8 @@ export default function App() {
     mode: 'card',
   });
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
+  const [prayersInitialSubScreen, setPrayersInitialSubScreen] =
+    useState<PrayersSubScreen | undefined>(undefined);
   const [activePushBanner, setActivePushBanner] =
     useState<DispatchedIslamicNotification | null>(null);
 
@@ -226,6 +234,80 @@ export default function App() {
       setActivePushBanner(active);
     });
   }, []);
+
+  // Global background notification scheduler when user is browsing other tabs (Quran, Adhkar, Duas, Qibla)
+  useEffect(() => {
+    if (activeTab === 'prayers') return;
+    let lastMin = '';
+    const checkSchedule = () => {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const currentHHMM = `${hh}:${mm}`;
+      if (currentHHMM === lastMin) return;
+      lastMin = currentHHMM;
+
+      const times = calculateAstronomicalPrayerTimes(
+        now,
+        selectedCity.latitude,
+        selectedCity.longitude,
+        selectedCity.timezoneOffsetHours,
+        methodId,
+        asrMethod
+      );
+      let alertsCfg = getDefaultPrayerAlertsConfig();
+      try {
+        const saved = localStorage.getItem('almihrab_prayer_alerts_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.fajr && parsed.dhuhr) alertsCfg = parsed;
+        }
+      } catch {
+        // ignore
+      }
+
+      const scheduled = evaluateScheduledNotificationsForMinute({
+        currentHHMM,
+        todayTimes: times,
+        alertsConfig: alertsCfg,
+        channelsConfig: loadPushChannelsConfig(),
+        cityNameAr: selectedCity.nameAr,
+        lastThirdStartHHMM: times.lastThird,
+        isFriday: now.getDay() === 5,
+      });
+      if (scheduled) {
+        dispatchSystemAndInAppNotification(scheduled).catch(() => {});
+      }
+    };
+
+    const timer = window.setInterval(checkSchedule, 10000);
+    return () => window.clearInterval(timer);
+  }, [activeTab, selectedCity, methodId, asrMethod]);
+
+  const handleHeaderBellClick = async () => {
+    const now = new Date();
+    const times = calculateAstronomicalPrayerTimes(
+      now,
+      selectedCity.latitude,
+      selectedCity.longitude,
+      selectedCity.timezoneOffsetHours,
+      methodId,
+      asrMethod
+    );
+    const nextInfo = getNextPrayerInfo(
+      times,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds()
+    );
+    await requestAndVerifyPushPermission(
+      selectedCity.nameAr,
+      nextInfo.nextPrayerNameAr,
+      nextInfo.nextPrayerTime
+    );
+    setPrayersInitialSubScreen('alerts');
+    handleSelectTab('prayers');
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -407,8 +489,19 @@ export default function App() {
             </div>
           </a>
 
-          {/* Mobile Left Slot: Global Search, Active City & Offline Storage / PWA Install */}
+          {/* Mobile Left Slot: Global Search, Push Bell, Active City & Offline Storage / PWA Install */}
           <div className="flex md:hidden items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="mobile-header-bell-btn"
+              onClick={() => void handleHeaderBellClick()}
+              aria-label="تفعيل وتجربة دفع الإشعارات الفورية"
+              title="إرسال إشعار فوري وفتح إعدادات التنبيهات"
+              className="p-1.5 rounded-lg bg-[#F7F4EE] border border-stone-200 text-stone-700 hover:text-[#14532D] cursor-pointer relative"
+            >
+              <Bell className="w-4 h-4 text-[#14532D]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#14532D] absolute top-1 right-1" />
+            </button>
             <button
               type="button"
               data-testid="mobile-global-search-btn"
@@ -463,8 +556,18 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Zone 3 (Desktop): Global Search + Offline Storage Manager & PWA Install */}
+          {/* Zone 3 (Desktop): Push Notification Trigger + Global Search + Offline Storage Manager & PWA Install */}
           <div className="hidden md:flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="desktop-header-bell-btn"
+              onClick={() => void handleHeaderBellClick()}
+              className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/70 border border-stone-200 text-xs font-semibold text-stone-800 flex items-center gap-1.5 cursor-pointer"
+              title="إرسال إشعار فوري وفتح إعدادات دفع الإشعارات والأذان"
+            >
+              <Bell className="w-3.5 h-3.5 text-[#14532D]" />
+              <span>الإشعارات</span>
+            </button>
             <button
               type="button"
               data-testid="desktop-global-search-btn"
@@ -594,6 +697,7 @@ export default function App() {
             hijriAdjustment={hijriAdjustment}
             onNavigateTab={handleSelectTab}
             onOpenDawahCard={handleOpenDawahCard}
+            initialSubScreen={prayersInitialSubScreen}
           />
         )}
 
