@@ -75,6 +75,36 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const quickTools: QuickToolShortcut[] = useMemo(
     () => [
       {
+        id: 'tool-prophets-stories',
+        titleAr: 'موسوعة قصص الأنبياء في القرآن وأدعيتهم (٢٥ نبياً ورسولاً)',
+        subtitleAr: 'شجرة الأنبياء التفاعلية ومعجزاتهم وأدعيتهم القرآنية المستجابة مع الاستماع الصوتي',
+        keywords: 'قصص الانبياء المرسلين ادم نوح ابراهيم موسى عيسى محمد يونس ايوب يوسف سليمان داود دعاء',
+        action: () => {
+          onNavigateTab('duas');
+          onClose();
+        },
+      },
+      {
+        id: 'tool-istikhara-guide',
+        titleAr: 'مُرشِد صلاة الاستخارة والتوبة والحاجة والضحى التفاعلي',
+        subtitleAr: 'مُركِّب دعاء الاستخارة التفاعلي باسم حاجتك مع الخطوات العملية وسجل الاستخارات',
+        keywords: 'استخارة الاستخارة صلاة التوبة الحاجة الضحى التسبيح دعاء قرار',
+        action: () => {
+          onNavigateTab('duas');
+          onClose();
+        },
+      },
+      {
+        id: 'tool-revived-sunnahs',
+        titleAr: 'السنن المهجورة والآداب النبوية اليومية (بالدليل الصحيح)',
+        subtitleAr: 'بطاقة سنة اليوم وسنن الفطرة والطعام واللباس والمنزل والجمعة مع متابعة التطبيق',
+        keywords: 'السنن المهجورة سنة اليوم الاداب النبوية الفطرة الطعام الشراب اللباس الجمعة',
+        action: () => {
+          onNavigateTab('prayers');
+          onClose();
+        },
+      },
+      {
         id: 'tool-night-thirds',
         titleAr: 'الثلث الأخير من الليل وصلاة الضحى وأوقات النهي',
         subtitleAr: 'حساب فلكي دقيق لوقت التهجّد والتنزّل الإلهي ومنتصف الليل الشرعي والضحى',

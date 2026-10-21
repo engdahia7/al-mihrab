@@ -366,115 +366,115 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
           </button>
         </div>
 
-        {/* Search Input */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="search"
-            aria-label="ابحث في الأذكار أو مصادرها"
-            placeholder="ابحث في الأذكار أو الراوي..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full min-h-[38px] pr-9 pl-3 py-1.5 text-xs bg-white border border-stone-300 rounded-xl text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#14532D]"
-          />
-        </div>
-      </div>
-
-      {/* Compact Fajr Alarm Bar (Hidden on mobile when focused on Masbaha) */}
-      <section
-        aria-label="منبّه الفجر"
-        data-testid="smart-fajr-alarm-card"
-        className={`${
-          mobileFocusMode === 'masbaha' && !isFajrAlarmRinging
-            ? 'hidden lg:block'
-            : 'block'
-        } bg-white border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#14532D]/10 text-[#14532D] flex items-center justify-center shrink-0">
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-sm sm:text-base font-bold text-stone-900">
-                  منبّه الفجر ({smartFajrInfo.alarmTimeHHMM})
-                </h2>
-                <span className="text-xs text-[#14532D] font-semibold">
-                  · فجر {selectedCity.nameAr}: {todayTimes.fajr}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {[
-              { offset: 0, label: 'مع الأذان' },
-              { offset: 15, label: 'قبل ١٥ د' },
-              { offset: 30, label: 'قبل ٣٠ د' },
-            ].map((opt) => (
-              <button
-                key={opt.offset}
-                type="button"
-                onClick={() => setFajrOffsetMinutes(opt.offset)}
-                className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                  fajrOffsetMinutes === opt.offset
-                    ? 'bg-[#14532D]/15 border-[#14532D] text-[#14532D] font-bold'
-                    : 'bg-[#FBF9F5] border-stone-200 text-stone-700 hover:bg-stone-100'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => setFajrAlarmEnabled((prev) => !prev)}
-              className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                fajrAlarmEnabled
-                  ? 'bg-[#14532D] text-white border-[#14532D]'
-                  : 'bg-[#F7F4EE] text-stone-700 border-stone-300'
-              }`}
-            >
-              {fajrAlarmEnabled ? 'مفعّل' : ' متوقف'}
-            </button>
-
-            <button
-              type="button"
-              data-testid="trigger-fajr-wakeup-btn"
-              onClick={handleTriggerFajrAlarmWakeup}
-              className="min-h-[34px] px-3 py-1 rounded-lg bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-              <span>معاينة</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Active Ringing Wake-Up Modal Banner */}
-        {isFajrAlarmRinging && (
-          <div
-            data-testid="fajr-wakeup-banner"
-            className="p-4 rounded-xl bg-[#14532D] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-          >
-            <div className="space-y-1">
-              <div className="text-xs font-semibold text-amber-300">
-                الصلاة خيرٌ من النوم · منبّه الفجر ({smartFajrInfo.alarmTimeHHMM})
-              </div>
-              <p className="font-quran text-lg sm:text-xl leading-relaxed">
-                «الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ»
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleDismissFajrAlarmAndReadWaking}
-              className="min-h-[38px] px-4 py-2 rounded-xl bg-white text-[#14532D] font-bold text-xs cursor-pointer shrink-0"
-            >
-              إيقاف المنبّه ومتابعة أذكار الاستيقاظ
-            </button>
+        {/* Contextual Search Input (shown for text Adhkar categories) */}
+        {activeCategory !== 'ruqyah' && (
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              aria-label="ابحث في الأذكار أو مصادرها"
+              placeholder="ابحث في الأذكار أو الراوي..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full min-h-[38px] pr-9 pl-3 py-1.5 text-xs bg-white border border-stone-300 rounded-xl text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#14532D]"
+            />
           </div>
         )}
-      </section>
+      </div>
+
+      {/* Contextual Fajr Wake-Up Alarm Bar (Shown only in Waking Adhkar or when actively ringing) */}
+      {(activeCategory === 'waking' || isFajrAlarmRinging) && (
+        <section
+          aria-label="منبّه الفجر وأذكار الاستيقاظ"
+          data-testid="smart-fajr-alarm-card"
+          className="bg-white border border-stone-200 rounded-2xl p-3.5 sm:p-4 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#14532D]/10 text-[#14532D] flex items-center justify-center shrink-0">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-display text-sm sm:text-base font-bold text-stone-900">
+                    منبّه الاستيقاظ للفجر ({smartFajrInfo.alarmTimeHHMM})
+                  </h2>
+                  <span className="text-xs text-[#14532D] font-semibold">
+                    · فجر {selectedCity.nameAr}: {todayTimes.fajr}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { offset: 0, label: 'مع الأذان' },
+                { offset: 15, label: 'قبل ١٥ د' },
+                { offset: 30, label: 'قبل ٣٠ د' },
+              ].map((opt) => (
+                <button
+                  key={opt.offset}
+                  type="button"
+                  onClick={() => setFajrOffsetMinutes(opt.offset)}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                    fajrOffsetMinutes === opt.offset
+                      ? 'bg-[#14532D]/15 border-[#14532D] text-[#14532D] font-bold'
+                      : 'bg-[#FBF9F5] border-stone-200 text-stone-700 hover:bg-stone-100'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setFajrAlarmEnabled((prev) => !prev)}
+                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                  fajrAlarmEnabled
+                    ? 'bg-[#14532D] text-white border-[#14532D]'
+                    : 'bg-[#F7F4EE] text-stone-700 border-stone-300'
+                }`}
+              >
+                {fajrAlarmEnabled ? 'مفعّل' : 'متوقف'}
+              </button>
+
+              <button
+                type="button"
+                data-testid="trigger-fajr-wakeup-btn"
+                onClick={handleTriggerFajrAlarmWakeup}
+                className="min-h-[34px] px-3 py-1 rounded-lg bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>معاينة</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Active Ringing Wake-Up Modal Banner */}
+          {isFajrAlarmRinging && (
+            <div
+              data-testid="fajr-wakeup-banner"
+              className="p-4 rounded-xl bg-[#14532D] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-amber-300">
+                  الصلاة خيرٌ من النوم · منبّه الفجر ({smartFajrInfo.alarmTimeHHMM})
+                </div>
+                <p className="font-quran text-lg sm:text-xl leading-relaxed">
+                  «الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ»
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissFajrAlarmAndReadWaking}
+                className="min-h-[38px] px-4 py-2 rounded-xl bg-white text-[#14532D] font-bold text-xs cursor-pointer shrink-0"
+              >
+                إيقاف المنبّه ومتابعة أذكار الاستيقاظ
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Mobile Quick Mode Switcher: Adhkar Cards vs Electronic Masbaha (< lg) */}
       <div className="lg:hidden grid grid-cols-2 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl">

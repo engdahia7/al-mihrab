@@ -6,7 +6,6 @@ import {
   Trash2,
   Maximize2,
   Minimize2,
-  Sparkles,
   CheckCircle2,
   HelpCircle,
   BookOpen,
@@ -612,7 +611,7 @@ export const SpecialPrayersAndIstikharaGuide: React.FC<
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2 border-b border-stone-200 pb-2.5">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#14532D] shrink-0" />
+                <BookOpen className="w-4 h-4 text-[#14532D] shrink-0" />
                 <div>
                   <h3 className="font-display text-base font-bold text-stone-950">
                     سجل الاستخارات والقرارات الشخصي

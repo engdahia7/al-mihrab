@@ -8,7 +8,6 @@ import {
   Check,
   Image as ImageIcon,
   BookOpen,
-  Sparkles,
   Award,
   MapPin,
   Users,
@@ -224,7 +223,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
           <div className="flex items-center justify-between text-[11px] text-[#D6CEBE]">
             <span>التسلسل الزمني للأنبياء والمرسلين (من آدم عليه السلام إلى خاتم المرسلين محمد ﷺ):</span>
             <span className="text-[#FDE68A] font-semibold">
-              ★ = من أولي العزم من الرسل (٥)
+              (أولو العزم) = من أولي العزم من الرسل (٥)
             </span>
           </div>
 
@@ -268,11 +267,13 @@ export const ProphetsStoriesEncyclopedia: React.FC<
                     {prophet.isUlulAzm && (
                       <span
                         title="من أولي العزم من الرسل"
-                        className={`text-[11px] ${
-                          isSelected ? 'text-amber-900' : 'text-[#FDE68A]'
+                        className={`text-[9px] px-1 py-0.5 rounded font-bold ${
+                          isSelected
+                            ? 'bg-amber-900/15 text-amber-950'
+                            : 'bg-[#FDE68A]/20 text-[#FDE68A]'
                         }`}
                       >
-                        ★
+                        أولو العزم
                       </span>
                     )}
                     {isReflected && (
@@ -303,7 +304,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
               </span>
               {activeProphet.isUlulAzm && (
                 <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-950 border border-amber-300 text-xs font-bold">
-                  ★ من أولي العزم من الرسل
+                  من أولي العزم من الرسل
                 </span>
               )}
               <span className="px-2.5 py-0.5 rounded-md bg-stone-200/80 text-stone-800 text-xs font-semibold">
@@ -399,7 +400,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
         {/* Miracles & Signs */}
         <div className="p-3.5 rounded-xl bg-white border border-stone-200 space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-[#14532D]">
-            <Sparkles className="w-4 h-4 shrink-0" />
+            <Award className="w-4 h-4 shrink-0" />
             <span>المعجزات والآيات البيّنات التي أيّده الله بها:</span>
           </div>
           <ul className="space-y-1.5 text-xs sm:text-sm text-stone-800 list-disc list-inside">
@@ -584,7 +585,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
                         </span>
                         {prophet.isUlulAzm && (
                           <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 text-[10px] font-bold">
-                            ★ من أولي العزم
+                            من أولي العزم
                           </span>
                         )}
                         <span className="text-[10px] text-stone-500 font-semibold">

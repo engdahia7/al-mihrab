@@ -7,7 +7,7 @@ import {
   Heart,
   Image as ImageIcon,
   Copy,
-  Sparkles,
+  BookOpen,
   Edit3,
 } from 'lucide-react';
 import {
@@ -326,7 +326,7 @@ export const DawahCardModal: React.FC<DawahCardModalProps> = ({
           <div className="bg-white border border-[#D8CBB3] rounded-2xl p-3.5 sm:p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-bold text-[#14532D]">
-                <Sparkles className="w-4 h-4 text-[#78350F]" />
+                <BookOpen className="w-4 h-4 text-[#78350F]" />
                 <span>اختر من روائع «آية اليوم وذكر اليوم» الجاهزة أو حرّر النص بحرية:</span>
               </div>
               <button

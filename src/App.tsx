@@ -593,10 +593,6 @@ export default function App() {
             onChangeAsrMethod={setAsrMethod}
             hijriAdjustment={hijriAdjustment}
             onNavigateTab={handleSelectTab}
-            onOpenMushafPage={(pageNum) => {
-              setTargetMushafPage(pageNum);
-              handleSelectTab('quran');
-            }}
             onOpenDawahCard={handleOpenDawahCard}
           />
         )}
@@ -625,7 +621,6 @@ export default function App() {
               handleSelectTab('quran');
             }}
             onOpenDawahCard={handleOpenDawahCard}
-            onOpenWaqfModal={handleOpenWaqfModal}
           />
         )}
 

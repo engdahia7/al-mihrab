@@ -11,7 +11,6 @@ import {
   Square,
   Send,
   ShieldCheck,
-  Sparkles,
 } from 'lucide-react';
 import {
   DailyPrayerTimes,
@@ -555,7 +554,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#78350F]" />
+            <BellRing className="w-4 h-4 text-[#78350F]" />
             <h4 className="text-xs sm:text-sm font-bold text-stone-900">
               قنوات دفع الإشعارات والتذكيرات الآلية
             </h4>

@@ -16,7 +16,6 @@ import {
   Compass,
   RefreshCw,
   ExternalLink,
-  Star,
   Route as RouteIcon,
   Search,
 } from 'lucide-react';
@@ -939,8 +938,7 @@ export const NearbyMosquesMap: React.FC<NearbyMosquesMapProps> = ({
                 </span>
                 {typeof selectedMosque.rating === 'number' && (
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800">
-                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                    <span>{selectedMosque.rating.toFixed(1)}</span>
+                    <span>التقييم: {selectedMosque.rating.toFixed(1)}</span>
                     {selectedMosque.userRatingCount ? (
                       <span className="text-stone-500">
                         ({toArabicNumerals(selectedMosque.userRatingCount)})

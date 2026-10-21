@@ -6,7 +6,6 @@ import {
   Calendar,
   Calculator,
   Clock,
-  Sparkles,
   Image as ImageIcon,
   Play,
   Pause,
@@ -17,7 +16,6 @@ import {
   Moon,
   Maximize2,
   Minimize2,
-  BookOpen,
 } from 'lucide-react';
 import { toArabicNumerals } from '../utils/astronomy';
 import {
@@ -43,9 +41,6 @@ import {
   KhushuRetreatGoalId,
   loadKhushuStats,
   saveKhushuStats,
-  DAILY_INSPIRATION_PRESETS,
-  getDailyInspirationPresetForDate,
-  presetToDawahCardPayload,
   PropheticSunnahCategoryId,
   PROPHETIC_SUNNAH_CATEGORIES,
   VERIFIED_PROPHETIC_SUNNAHS,
@@ -59,31 +54,30 @@ import {
 } from '../utils/worshipTrackerAndTools';
 import { triggerMasbahaTactileFeedback } from '../utils/islamicFeatures';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
-import { SpecialPrayersAndIstikharaGuide } from './SpecialPrayersAndIstikharaGuide';
-import { ProphetsStoriesEncyclopedia } from './ProphetsStoriesEncyclopedia';
+
+export type WorshipHubSubSection = 'tracker' | 'sunnah' | 'qada' | 'khushu';
 
 interface WorshipAndQadaHubProps {
   hijriDay: number;
   hijriMonthNameAr: string;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
-  onOpenMushafPage?: (pageNum: number) => void;
+  initialSubSection?: WorshipHubSubSection;
 }
 
 export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
   hijriDay,
   hijriMonthNameAr,
   onOpenDawahCard,
-  onOpenMushafPage,
+  initialSubSection,
 }) => {
-  const [activeSubSection, setActiveSubSection] = useState<
-    | 'tracker'
-    | 'sunnah'
-    | 'istikhara_guide'
-    | 'prophets_stories'
-    | 'qada'
-    | 'khushu'
-    | 'daily_card'
-  >('tracker');
+  const [activeSubSection, setActiveSubSection] =
+    useState<WorshipHubSubSection>(initialSubSection || 'tracker');
+
+  useEffect(() => {
+    if (initialSubSection) {
+      setActiveSubSection(initialSubSection);
+    }
+  }, [initialSubSection]);
 
   // =========================================================================
   // 1. DAILY WORSHIP, 12 RAWATIB & FASTING STATE
@@ -501,22 +495,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
       : 0;
 
   // =========================================================================
-  // 4. DAILY AYAH & DHIKR PNG CARD STUDIO SHOWCASE
-  // =========================================================================
-  const [selectedPresetIdx, setSelectedPresetIdx] = useState<number>(() => {
-    const todayPreset = getDailyInspirationPresetForDate();
-    const idx = DAILY_INSPIRATION_PRESETS.findIndex(
-      (p) => p.id === todayPreset.id
-    );
-    return idx >= 0 ? idx : 0;
-  });
-
-  const currentInspirationPreset =
-    DAILY_INSPIRATION_PRESETS[selectedPresetIdx] ||
-    DAILY_INSPIRATION_PRESETS[0];
-
-  // =========================================================================
-  // 5. ABANDONED SUNNAHS & DAILY PROPHETIC ETIQUETTE STATE
+  // 4. ABANDONED SUNNAHS & DAILY PROPHETIC ETIQUETTE STATE
   // =========================================================================
   const [sunnahState, setSunnahState] = useState<PropheticSunnahTrackerState>(
     () => loadSunnahTrackerState()
@@ -575,21 +554,21 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
       data-testid="worship-and-qada-hub"
       className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-5 shadow-xs"
     >
-      {/* Top Header & Sub-Navigation Switcher */}
+      {/* Top Header & 4-Tab Sub-Navigation Switcher */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-stone-200 pb-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-display text-base sm:text-lg font-bold text-stone-900">
-            سجل المحاسبة اليومي والسنن والاستخارة وقصص الأنبياء
+            سجل المحاسبة اليومي والسنن النبوية والقضاء
           </h3>
           <span className="text-xs text-stone-500">
-            · الفرائض والرواتب · السنن المهجورة · الاستخارة والصلوات · قصص الأنبياء (٢٥)
+            · الفرائض والرواتب · السنن المهجورة · جدولة القضاء · خلوة الخشوع
           </span>
         </div>
 
         <div
           role="tablist"
-          aria-label="أدوات المحاسبة والسنن والاستخارة وقصص الأنبياء والقضاء"
-          className="flex flex-wrap gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl"
+          aria-label="أدوات المحاسبة والسنن والقضاء والخلوة"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl"
         >
           <button
             type="button"
@@ -597,14 +576,14 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
             data-testid="hub-tab-tracker"
             aria-selected={activeSubSection === 'tracker'}
             onClick={() => setActiveSubSection('tracker')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
               activeSubSection === 'tracker'
                 ? 'bg-[#14532D] text-white shadow-2xs'
                 : 'text-stone-700 hover:bg-stone-200/70'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            <span>سجل الصلوات والسنن</span>
+            <span>سجل الصلوات والصيام</span>
           </button>
 
           <button
@@ -613,7 +592,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
             data-testid="hub-tab-sunnah"
             aria-selected={activeSubSection === 'sunnah'}
             onClick={() => setActiveSubSection('sunnah')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
               activeSubSection === 'sunnah'
                 ? 'bg-[#14532D] text-white shadow-2xs'
                 : 'text-stone-700 hover:bg-stone-200/70'
@@ -626,42 +605,10 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
           <button
             type="button"
             role="tab"
-            data-testid="hub-tab-istikhara"
-            aria-selected={activeSubSection === 'istikhara_guide'}
-            onClick={() => setActiveSubSection('istikhara_guide')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-              activeSubSection === 'istikhara_guide'
-                ? 'bg-[#14532D] text-white shadow-2xs'
-                : 'text-stone-700 hover:bg-stone-200/70'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span>مرشد الاستخارة والصلوات</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            data-testid="hub-tab-prophets"
-            aria-selected={activeSubSection === 'prophets_stories'}
-            onClick={() => setActiveSubSection('prophets_stories')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-              activeSubSection === 'prophets_stories'
-                ? 'bg-[#14532D] text-white shadow-2xs'
-                : 'text-stone-700 hover:bg-stone-200/70'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5 shrink-0" />
-            <span>قصص الأنبياء وأدعيتهم (٢٥)</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
             data-testid="hub-tab-qada"
             aria-selected={activeSubSection === 'qada'}
             onClick={() => setActiveSubSection('qada')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
               activeSubSection === 'qada'
                 ? 'bg-[#14532D] text-white shadow-2xs'
                 : 'text-stone-700 hover:bg-stone-200/70'
@@ -677,7 +624,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
             data-testid="hub-tab-khushu"
             aria-selected={activeSubSection === 'khushu'}
             onClick={() => setActiveSubSection('khushu')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
               activeSubSection === 'khushu'
                 ? 'bg-[#14532D] text-white shadow-2xs'
                 : 'text-stone-700 hover:bg-stone-200/70'
@@ -685,22 +632,6 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
           >
             <Moon className="w-3.5 h-3.5 shrink-0" />
             <span>خلوة الخشوع</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            data-testid="hub-tab-daily-card"
-            aria-selected={activeSubSection === 'daily_card'}
-            onClick={() => setActiveSubSection('daily_card')}
-            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-              activeSubSection === 'daily_card'
-                ? 'bg-[#14532D] text-white shadow-2xs'
-                : 'text-stone-700 hover:bg-stone-200/70'
-            }`}
-          >
-            <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>بطاقة آية اليوم</span>
           </button>
         </div>
       </div>
@@ -1076,153 +1007,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
               </div>
             </div>
           </div>
-
-          {/* 5. Featured Daily Prophetic Sunnah & Etiquette Card inside Tracker */}
-          <div
-            data-testid="daily-sunnah-preview-card"
-            className="bg-[#FAF6EC] border border-[#C8B696] rounded-xl p-4 sm:p-5 space-y-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="space-y-0.5">
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#78350F] font-semibold">
-                  <span>٥. سُنّة اليوم والآداب النبوية</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{featuredSunnah.categoryLabelAr}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{featuredSunnah.statusLabelAr}</span>
-                </div>
-                <h4 className="font-display text-sm sm:text-base font-bold text-[#14532D]">
-                  {featuredSunnah.titleAr}
-                </h4>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  data-testid="preview-apply-sunnah-btn"
-                  onClick={() => handleToggleSunnahApplied(featuredSunnah.id)}
-                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                    sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
-                      ? 'bg-[#14532D] text-white'
-                      : 'bg-white border border-[#14532D]/40 text-[#14532D] hover:bg-[#14532D]/10'
-                  }`}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>
-                    {sunnahAnalytics.todayAppliedIds.includes(featuredSunnah.id)
-                      ? 'طبّقتها اليوم ✓'
-                      : 'طبّقتها اليوم'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="open-all-sunnahs-btn"
-                  onClick={() => setActiveSubSection('sunnah')}
-                  className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-bold cursor-pointer"
-                >
-                  عرض كل السنن والآداب ({toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)})
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white/90 border border-[#DFD2BA] rounded-xl p-3.5 space-y-2">
-              <p className="font-quran text-base sm:text-lg text-stone-900 leading-relaxed">
-                {featuredSunnah.hadithArabicText}
-              </p>
-              <p className="text-xs font-bold text-[#78350F]">
-                الدليل ودرجة الحديث: {featuredSunnah.sourceAndGradingAr}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
-              <div className="bg-white/80 border border-stone-200/90 rounded-lg p-3 space-y-1">
-                <span className="font-bold text-[#14532D] block">
-                  كيف تطبقها عملياً اليوم؟
-                </span>
-                <p className="text-stone-700 leading-relaxed">
-                  {featuredSunnah.practicalHowToAr}
-                </p>
-              </div>
-              <div className="bg-white/80 border border-stone-200/90 rounded-lg p-3 space-y-1">
-                <span className="font-bold text-[#78350F] block">
-                  الأجر والثمرة النبوية:
-                </span>
-                <p className="text-stone-700 leading-relaxed">
-                  {featuredSunnah.spiritualRewardAr}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. Quick Launch Cards for Special Prayers (Istikhara/Tawbah/Hajah) & 25 Prophets Encyclopedia */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-4 rounded-xl bg-[#FCF9F2] border border-[#14532D]/25 flex flex-col justify-between gap-3">
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold text-[#14532D] block">
-                  ٦. مُرشِد الاستخارة وصلاة التوبة والحاجة والتسبيح
-                </span>
-                <h4 className="font-display text-sm sm:text-base font-bold text-stone-950">
-                  مُركِّب دعاء الاستخارة التفاعلي + سجل القرارات الشخصي
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  اكتب الأمر الذي تستخير فيه ليُدرج تلقائياً في موضعه الصحيح من حديث البخاري المشكول مع تصحيح المفاهيم الشائعة.
-                </p>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  data-testid="open-istikhara-from-tracker-btn"
-                  onClick={() => setActiveSubSection('istikhara_guide')}
-                  className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] hover:bg-[#14532D]/90 text-white text-xs font-bold cursor-pointer"
-                >
-                  فتح مرشد الاستخارة والصلوات ←
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-[#FCF9F2] border border-[#78350F]/25 flex flex-col justify-between gap-3">
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold text-[#78350F] block">
-                  ٧. موسوعة قصص الأنبياء في القرآن وأدعيتهم (٢٥ نبياً ورسولاً)
-                </span>
-                <h4 className="font-display text-sm sm:text-base font-bold text-stone-950">
-                  شجرة الأنبياء التفاعلية ومعجزاتهم وأدعيتهم المستجابة بالصوت
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  تصفّح قصص الـ ٢٥ نبياً ورسولاً ونسبهم والسور التي ذُكروا فيها واستمع لأدعيتهم القرآنية مع ختمة التدبر.
-                </p>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  data-testid="open-prophets-from-tracker-btn"
-                  onClick={() => setActiveSubSection('prophets_stories')}
-                  className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-bold cursor-pointer"
-                >
-                  فتح موسوعة الأنبياء وأدعيتهم (٢٥) ←
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
-      )}
-
-      {/* =====================================================================
-          SECTION 1C: INTERACTIVE ISTIKHARA, TAWBAH & SPECIAL PRAYERS GUIDE
-         ===================================================================== */}
-      {activeSubSection === 'istikhara_guide' && (
-        <SpecialPrayersAndIstikharaGuide onOpenDawahCard={onOpenDawahCard} />
-      )}
-
-      {/* =====================================================================
-          SECTION 1D: ENCYCLOPEDIA OF THE 25 PROPHETS IN THE QURAN & THEIR DUAS
-         ===================================================================== */}
-      {activeSubSection === 'prophets_stories' && (
-        <ProphetsStoriesEncyclopedia
-          onOpenMushafPage={onOpenMushafPage}
-          onOpenDawahCard={onOpenDawahCard}
-        />
       )}
 
       {/* =====================================================================
@@ -1307,7 +1092,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
                   }
                   className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
                   <span>سُنّة أخرى ({toArabicNumerals(featuredSunnahIdx + 1)}/{toArabicNumerals(VERIFIED_PROPHETIC_SUNNAHS.length)})</span>
                 </button>
 
@@ -1972,71 +1757,6 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
         </div>
       )}
 
-      {/* =====================================================================
-          SECTION 4: DAILY AYAH & DHIKR PNG CARD STUDIO LAUNCHER
-         ===================================================================== */}
-      {activeSubSection === 'daily_card' && (
-        <div
-          data-testid="section-daily-card-studio"
-          className="bg-[#FAF5E8] border-2 border-[#B59E7A] rounded-2xl p-4 sm:p-6 space-y-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <span className="text-xs font-bold text-[#78350F]">
-                {currentInspirationPreset.badgeAr}
-              </span>
-              <h4 className="font-display text-base sm:text-lg font-bold text-[#14532D]">
-                {currentInspirationPreset.titleAr}
-              </h4>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setSelectedPresetIdx(
-                    (prev) => (prev + 1) % DAILY_INSPIRATION_PRESETS.length
-                  )
-                }
-                className="px-3 py-1.5 rounded-xl bg-white border border-[#C8B696] text-xs font-bold text-stone-800 hover:bg-[#EFE4CE] flex items-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#78350F]" />
-                <span>تبديل آية / ذكر اليوم</span>
-              </button>
-
-              {onOpenDawahCard && (
-                <button
-                  type="button"
-                  data-testid="open-png-studio-from-hub-btn"
-                  onClick={() =>
-                    onOpenDawahCard(
-                      presetToDawahCardPayload(currentInspirationPreset)
-                    )
-                  }
-                  className="px-4 py-2 rounded-xl bg-[#14532D] hover:bg-[#14532D]/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span>فتح استوديو التصميم والتحميل كصورة (PNG)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white border border-[#D8CBB3] rounded-xl p-4 sm:p-5 space-y-2.5 text-center">
-            <p className="font-quran text-xl sm:text-2xl text-stone-900 leading-loose">
-              {currentInspirationPreset.type === 'ayah'
-                ? `﴿ ${currentInspirationPreset.mainArabicText} ﴾`
-                : `« ${currentInspirationPreset.mainArabicText} »`}
-            </p>
-            <p className="text-xs sm:text-sm text-stone-700 leading-relaxed max-w-3xl mx-auto">
-              {currentInspirationPreset.tafsirOrVirtueAr}
-            </p>
-            <p className="text-xs font-bold text-[#78350F]">
-              {currentInspirationPreset.sourceAr}
-            </p>
-          </div>
-        </div>
-      )}
     </section>
   );
 };

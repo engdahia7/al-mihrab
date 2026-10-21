@@ -5,7 +5,6 @@ import {
   Copy,
   Check,
   Image as ImageIcon,
-  Heart,
 } from 'lucide-react';
 import {
   DUA_TOPIC_CATEGORIES,
@@ -14,9 +13,6 @@ import {
   AuthenticDuaItem,
 } from '../data/duasData';
 import {
-  THEMATIC_QURAN_CATEGORIES,
-  THEMATIC_QURAN_VERSES,
-  QuranThemeCategoryId,
   ASMA_ALLAH_AL_HUSNA_LIST,
   AsmaCategoryFilter,
   AsmaAllahItem,
@@ -29,21 +25,33 @@ import { SpecialPrayersAndIstikharaGuide } from './SpecialPrayersAndIstikharaGui
 
 const FAVORITE_DUAS_STORAGE_KEY = 'almihrab_favorite_duas_v1';
 
+export type DuasSectionId =
+  | 'duas'
+  | 'prophets_stories'
+  | 'istikhara_guide'
+  | 'asma_husna';
+
 interface DuasViewProps {
   onOpenMushafPage?: (pageNum: number) => void;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
-  onOpenWaqfModal?: () => void;
+  initialSection?: DuasSectionId;
 }
 
 export const DuasView: React.FC<DuasViewProps> = ({
   onOpenMushafPage,
   onOpenDawahCard,
-  onOpenWaqfModal,
+  initialSection,
 }) => {
-  // Primary Section Switcher: Authentic Duas | Prophets Stories (25) | Istikhara & Special Prayers | Asma Allah Al-Husna | Thematic Quran Index
-  const [activeSection, setActiveSection] = useState<
-    'duas' | 'prophets_stories' | 'istikhara_guide' | 'asma_husna' | 'thematic_quran'
-  >('duas');
+  // Primary Section Switcher: Authentic Duas | Prophets Stories (25) | Istikhara & Special Prayers | Asma Allah Al-Husna
+  const [activeSection, setActiveSection] = useState<DuasSectionId>(
+    initialSection || 'duas'
+  );
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   const [selectedTopic, setSelectedTopic] = useState<DuaTopicCategoryId>('all');
   const [originFilter, setOriginFilter] = useState<
@@ -54,10 +62,6 @@ export const DuasView: React.FC<DuasViewProps> = ({
 
   // Asma Allah Al-Husna filters
   const [asmaCategory, setAsmaCategory] = useState<AsmaCategoryFilter>('ALL');
-
-  // Thematic Quran filters
-  const [selectedQuranTheme, setSelectedQuranTheme] =
-    useState<QuranThemeCategoryId>('all');
 
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
     try {
@@ -130,22 +134,6 @@ export const DuasView: React.FC<DuasViewProps> = ({
     });
   }, [asmaCategory, searchQuery]);
 
-  const filteredThematicVerses = useMemo(() => {
-    return THEMATIC_QURAN_VERSES.filter((v) => {
-      if (selectedQuranTheme !== 'all' && v.themeId !== selectedQuranTheme) {
-        return false;
-      }
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.trim();
-      return (
-        v.topicTitleAr.includes(q) ||
-        v.uthmaniText.includes(q) ||
-        v.reflectionAr.includes(q) ||
-        v.surahNameAr.includes(q)
-      );
-    });
-  }, [selectedQuranTheme, searchQuery]);
-
   const handleToggleFavorite = (id: string) => {
     setFavoriteIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [id, ...prev]
@@ -172,43 +160,41 @@ export const DuasView: React.FC<DuasViewProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {/* Header & Search */}
+      {/* Header & Contextual Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div>
           <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
             الأدعية وقصص الأنبياء والأسماء الحسنى
           </h1>
-          {onOpenWaqfModal && (
-            <button
-              type="button"
-              data-testid="duas-open-waqf-btn"
-              onClick={onOpenWaqfModal}
-              className="min-h-[34px] px-3 py-1 rounded-xl bg-[#14532D]/10 hover:bg-[#14532D]/15 text-[#14532D] border border-[#14532D]/25 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Heart className="w-3.5 h-3.5" />
-              <span>وقف وإهداء للوالدين أو متوفى</span>
-            </button>
-          )}
+          <p className="text-xs text-stone-500 mt-0.5">
+            جوامع الدعاء المأثور · موسوعة الأنبياء وأدعيتهم (٢٥) · مرشد الاستخارة والصلوات · الأسماء الحسنى (٩٩)
+          </p>
         </div>
 
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="search"
-            aria-label="ابحث في الأدعية أو أسماء الله الحسنى أو المواضيع القرآنية"
-            placeholder="ابحث في الدعاء أو الاسم..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full min-h-[38px] pr-9 pl-3 py-1.5 text-xs bg-white border border-stone-300 rounded-xl text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#14532D]"
-          />
-        </div>
+        {(activeSection === 'duas' || activeSection === 'asma_husna') && (
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              aria-label="ابحث في الأدعية أو أسماء الله الحسنى"
+              placeholder={
+                activeSection === 'duas'
+                  ? 'ابحث في الدعاء أو المناسبة...'
+                  : 'ابحث في أسماء الله الحسنى ومعانيها...'
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full min-h-[38px] pr-9 pl-3 py-1.5 text-xs bg-white border border-stone-300 rounded-xl text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#14532D]"
+            />
+          </div>
+        )}
       </div>
 
-      {/* Top 5-Section Switcher */}
+      {/* Top 4-Section Switcher */}
       <div
         role="tablist"
-        aria-label="أقسام الأدعية وقصص الأنبياء والاستخارة والأسماء الحسنى والمفهرس الموضوعي"
-        className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
+        aria-label="أقسام الأدعية وقصص الأنبياء والاستخارة والأسماء الحسنى"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
       >
         <button
           type="button"
@@ -267,22 +253,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>الأسماء الحسنى</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          data-testid="duas-tab-thematic"
-          aria-selected={activeSection === 'thematic_quran'}
-          onClick={() => setActiveSection('thematic_quran')}
-          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
-            activeSection === 'thematic_quran'
-              ? 'bg-[#14532D] text-white shadow-xs'
-              : 'text-stone-700 hover:bg-stone-200/70'
-          }`}
-        >
-          <span>آيات موضوعية</span>
+          <span>الأسماء الحسنى (٩٩)</span>
         </button>
       </div>
 
@@ -612,96 +583,6 @@ export const DuasView: React.FC<DuasViewProps> = ({
         </div>
       )}
 
-      {/* =====================================================================
-          SECTION 3: THEMATIC QURAN INDEX (المفهرس الموضوعي للقرآن الكريم)
-         ===================================================================== */}
-      {activeSection === 'thematic_quran' && (
-        <div className="space-y-4" data-testid="thematic-quran-section">
-          {/* Theme Category Filter Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white border border-stone-200 rounded-2xl">
-            {THEMATIC_QURAN_CATEGORIES.map((cat) => {
-              const active = cat.id === selectedQuranTheme;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSelectedQuranTheme(cat.id)}
-                  className={`min-h-[32px] px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-[#14532D] text-white'
-                      : 'text-stone-700 hover:bg-stone-100'
-                  }`}
-                >
-                  {cat.nameAr}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredThematicVerses.map((v) => (
-              <article
-                key={v.id}
-                className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-semibold text-[#14532D] block">
-                        سورة {v.surahNameAr} · الآية {toArabicNumerals(v.ayahNumber)}
-                      </span>
-                      <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 mt-0.5">
-                        {v.topicTitleAr}
-                      </h2>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {onOpenDawahCard && (
-                        <button
-                          type="button"
-                          data-testid={`thematic-share-card-btn-${v.id}`}
-                          onClick={() =>
-                            onOpenDawahCard({
-                              category: 'ayah',
-                              headerBadgeAr: `سُورَةُ ${v.surahNameAr} · الآية ${toArabicNumerals(v.ayahNumber)} · صفحة ${toArabicNumerals(v.mushafPage)}`,
-                              titleAr: v.topicTitleAr,
-                              mainArabicText: v.uthmaniText,
-                              explanationOrVirtueAr: v.reflectionAr,
-                              sourceAndGradingAr: `الموضوع: ${v.topicTitleAr}`,
-                            })
-                          }
-                          className="min-h-[32px] px-2.5 py-1 rounded-xl border border-[#14532D]/20 bg-[#14532D]/8 text-[#14532D] text-xs font-semibold hover:bg-[#14532D]/15 flex items-center gap-1 cursor-pointer"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span>بطاقة دعوية</span>
-                        </button>
-                      )}
-                      {onOpenMushafPage && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenMushafPage(v.mushafPage)}
-                          className="min-h-[32px] px-3 py-1 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 cursor-pointer shrink-0"
-                        >
-                          المصحف (ص {toArabicNumerals(v.mushafPage)})
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="font-quran text-xl sm:text-2xl text-stone-900 leading-[2.15] text-right py-1">
-                    ﴿{v.uthmaniText}﴾
-                  </p>
-                </div>
-
-                <p className="text-xs text-stone-600 leading-relaxed pt-2.5 border-t border-stone-100">
-                  <strong className="text-[#78350F]">التوجيه القرآني: </strong>
-                  {v.reflectionAr}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

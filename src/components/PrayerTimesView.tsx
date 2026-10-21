@@ -49,7 +49,10 @@ import {
   dispatchSystemAndInAppNotification,
   loadPushChannelsConfig,
 } from '../utils/notificationDispatcher';
-import { WorshipAndQadaHub } from './WorshipAndQadaHub';
+import {
+  WorshipAndQadaHub,
+  type WorshipHubSubSection,
+} from './WorshipAndQadaHub';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const ALERTS_STORAGE_KEY = 'almihrab_prayer_alerts_v1';
@@ -67,6 +70,8 @@ interface PrayerTimesViewProps {
   onNavigateTab: (tab: 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla') => void;
   onOpenMushafPage?: (page: number) => void;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
+  initialSubScreen?: PrayersSubScreen;
+  initialWorshipSubSection?: WorshipHubSubSection;
 }
 
 export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
@@ -80,10 +85,18 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
   onNavigateTab,
   onOpenMushafPage,
   onOpenDawahCard,
+  initialSubScreen,
+  initialWorshipSubSection,
 }) => {
   const [now, setNow] = useState<Date>(() => new Date());
   const [activeSubScreen, setActiveSubScreen] =
-    useState<PrayersSubScreen>('worship_qada');
+    useState<PrayersSubScreen>(initialSubScreen || 'worship_qada');
+
+  useEffect(() => {
+    if (initialSubScreen) {
+      setActiveSubScreen(initialSubScreen);
+    }
+  }, [initialSubScreen]);
   const [showAdvancedSettings, setShowAdvancedSettings] =
     useState<boolean>(false);
   const [showMonthlyTable, setShowMonthlyTable] = useState<boolean>(false);
@@ -708,7 +721,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>المحاسبة والقضاء والخلوة</span>
+          <span>العبادات والسنن والقضاء</span>
         </button>
 
         <button
@@ -757,13 +770,13 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
         </button>
       </div>
 
-      {/* SUB-SCREEN 1: Worship Tracker, Qada Calculator, Khushu Retreat & Daily PNG Card Studio */}
+      {/* SUB-SCREEN 1: Worship Tracker, Prophetic Sunnahs, Qada Calculator & Khushu Retreat */}
       {activeSubScreen === 'worship_qada' && (
         <WorshipAndQadaHub
           hijriDay={hijriDate.day}
           hijriMonthNameAr={hijriDate.monthNameAr}
           onOpenDawahCard={onOpenDawahCard}
-          onOpenMushafPage={onOpenMushafPage}
+          initialSubSection={initialWorshipSubSection}
         />
       )}
 
