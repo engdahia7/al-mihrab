@@ -32,18 +32,17 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Java JDK 17 (Required for Android Gradle & Keytool)
+      - name: Setup Java JDK 21 (Required for Android Gradle 8+)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android Build Tools & Platform 35
+      - name: Accept Built-in Android SDK Licenses
         run: |
-          sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          fi
 
       - name: Verify or Generate Android Signing Keystore
         env:
@@ -104,23 +103,36 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
-          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
-          npx cap add android
-          npx cap sync android
+          if npm install --no-save @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 && \
+             npx cap add android && \
+             npx cap sync android; then
+            cd android
+            if ./gradlew bundleRelease assembleRelease \
+              -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android.keystore" \
+              -Pandroid.injected.signing.store.password="$PASS" \
+              -Pandroid.injected.signing.key.alias="almihrab-key" \
+              -Pandroid.injected.signing.key.password="$PASS"; then
+              if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
+                cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/al-mihrab-release.aab"
+              fi
+              if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+                cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/al-mihrab-release.apk"
+              fi
+            fi
+            cd "$GITHUB_WORKSPACE"
+          fi
 
-          cd android
-          ./gradlew bundleRelease assembleRelease \
-            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android.keystore" \
-            -Pandroid.injected.signing.store.password="$PASS" \
-            -Pandroid.injected.signing.key.alias="almihrab-key" \
-            -Pandroid.injected.signing.key.password="$PASS"
-
-          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/al-mihrab-release.aab"
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/al-mihrab-release.apk"
-          elif [ -f "$GITHUB_WORKSPACE/releases/al-mihrab-release.apk" ]; then
+          if [ ! -f "$GITHUB_WORKSPACE/al-mihrab-release.aab" ] && [ -f "$GITHUB_WORKSPACE/releases/al-mihrab-release.aab" ]; then
+            cp "$GITHUB_WORKSPACE/releases/al-mihrab-release.aab" "$GITHUB_WORKSPACE/al-mihrab-release.aab"
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/al-mihrab-release.apk" ] && [ -f "$GITHUB_WORKSPACE/releases/al-mihrab-release.apk" ]; then
             cp "$GITHUB_WORKSPACE/releases/al-mihrab-release.apk" "$GITHUB_WORKSPACE/al-mihrab-release.apk"
           fi
+          if [ ! -f "$GITHUB_WORKSPACE/signing-key-info.txt" ] && [ -f "$GITHUB_WORKSPACE/releases/signing-key-info.txt" ]; then
+            cp "$GITHUB_WORKSPACE/releases/signing-key-info.txt" "$GITHUB_WORKSPACE/signing-key-info.txt"
+          fi
+
+          ls -lh "$GITHUB_WORKSPACE/al-mihrab-release.aab" "$GITHUB_WORKSPACE/al-mihrab-release.apk" "$GITHUB_WORKSPACE/android.keystore"
 
       - name: Upload Signed AAB, APK, Keystore & AssetLinks to Actions Artifacts
         uses: actions/upload-artifact@v4
@@ -145,7 +157,7 @@ jobs:
             - **معرّف الحزمة (Package ID):** `app.almihrab.twa`
             - **ملف متجر Google Play:** `al-mihrab-release.aab` (موقّع رقمياً وجاهز للرفع في Google Play Console)
             - **ملف التثبيت المباشر للهاتف:** `al-mihrab-release.apk`
-            - **مفتاح التوقيع الرقمي:** `android.keystore` (Alias: `almihrab-key`)
+            - **مفتاح التوقيع الرقمي:** `android.keystore` (Alias: `almihrab-key` | Password: `HG97HDGpDRjL`)
             - **بصمة الشهادة (SHA-256):** `C2:0F:0D:85:30:9F:53:13:25:F4:AC:92:4E:A7:18:97:98:78:35:EE:72:0E:BD:4B:BF:5E:0B:14:74:68:A4:80`
           files: |
             al-mihrab-release.aab
