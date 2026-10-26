@@ -12,6 +12,7 @@ import {
   Bell,
   VolumeX,
   X,
+  Package,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -30,6 +31,7 @@ import { DuasView } from './components/DuasView';
 import { QiblaAndSourcesView } from './components/QiblaAndSourcesView';
 import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
+import { AndroidAabExportModal } from './components/AndroidAabExportModal';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
 import { DawahCardModal } from './components/DawahCardModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
@@ -234,6 +236,7 @@ export default function App() {
     mode: 'card',
   });
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
+  const [isAabExportOpen, setIsAabExportOpen] = useState<boolean>(false);
   const [prayersInitialSubScreen, setPrayersInitialSubScreen] =
     useState<PrayersSubScreen | undefined>(undefined);
   const [prayersInitialWorshipSubSection, setPrayersInitialWorshipSubSection] =
@@ -868,12 +871,24 @@ export default function App() {
                 مصحف المدينة النبوية · حصن المسلم · المواقيت الفلكية والمواريث الشرعية
               </span>
             </div>
-            <a
-              href="./privacy-policy.html"
-              className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium"
-            >
-              سياسة الخصوصية
-            </a>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="footer-open-aab-modal-btn"
+                onClick={() => setIsAabExportOpen(true)}
+                className="inline-flex items-center gap-1 text-[#14532D] hover:underline underline-offset-4 whitespace-nowrap font-bold cursor-pointer"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>تصدير ملف AAB (Google Play)</span>
+              </button>
+              <span aria-hidden="true">·</span>
+              <a
+                href="./privacy-policy.html"
+                className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium"
+              >
+                سياسة الخصوصية
+              </a>
+            </div>
           </div>
         </div>
       </footer>
@@ -957,6 +972,10 @@ export default function App() {
           setNavigationSignal((n) => n + 1);
           handleSelectTab('qibla');
         }}
+      />
+      <AndroidAabExportModal
+        isOpen={isAabExportOpen}
+        onClose={() => setIsAabExportOpen(false)}
       />
     </div>
   );

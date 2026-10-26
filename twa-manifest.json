@@ -1,6 +1,6 @@
 {
   "packageId": "app.almihrab.twa",
-  "host": "al-mihrab.example.com",
+  "host": "ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app",
   "name": "المحراب — مواقيت الصلاة والمصحف والأذكار",
   "launcherName": "المحراب",
   "display": "standalone",
@@ -13,37 +13,44 @@
   "backgroundColor": "#FBF9F5",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://al-mihrab.example.com/pwa-512x512.png",
-  "maskableIconUrl": "https://al-mihrab.example.com/pwa-maskable-512x512.png",
+  "iconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-512x512.png",
+  "maskableIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-maskable-512x512.png",
+  "monochromeIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-192x192.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./android.keystore",
     "alias": "almihrab-key"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
+  "appVersionName": "1.1.0",
+  "appVersionCode": 2,
   "shortcuts": [
     {
-      "name": "المصحف الشريف",
+      "name": "المصحف الشريف والختمة",
       "shortName": "المصحف",
-      "url": "https://al-mihrab.example.com/?tab=quran",
-      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+      "url": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/?tab=quran",
+      "chosenIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-192x192.png"
     },
     {
-      "name": "مواقيت الصلاة",
+      "name": "مواقيت الصلاة والأذان",
       "shortName": "المواقيت",
-      "url": "https://al-mihrab.example.com/?tab=prayers",
-      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+      "url": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/?tab=prayers",
+      "chosenIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-192x192.png"
     },
     {
-      "name": "اتجاه القبلة",
-      "shortName": "القبلة",
-      "url": "https://al-mihrab.example.com/?tab=qibla",
-      "chosenIconUrl": "https://al-mihrab.example.com/pwa-192x192.png"
+      "name": "أذكار المسلم والمنبّه",
+      "shortName": "الأذكار",
+      "url": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/?tab=adhkar",
+      "chosenIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-192x192.png"
+    },
+    {
+      "name": "الأدعية والأحاديث الصحيحة",
+      "shortName": "الأحاديث",
+      "url": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/?tab=duas",
+      "chosenIconUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/pwa-192x192.png"
     }
   ],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://al-mihrab.example.com/manifest.webmanifest",
+  "webManifestUrl": "https://ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {
     "locationDelegation": {
@@ -57,5 +64,7 @@
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "minSdkVersion": 21,
+  "targetSdkVersion": 35,
   "orientation": "portrait"
 }
+

@@ -8,6 +8,7 @@ import {
   Smartphone,
   X,
   Trash2,
+  Package,
 } from 'lucide-react';
 import {
   getOfflineCachedPagesCount,
@@ -17,6 +18,7 @@ import {
   OfflineMushafSurahBlock,
 } from '../utils/offlineQuranStorage';
 import { toArabicNumerals } from '../utils/astronomy';
+import { AndroidAabExportModal } from './AndroidAabExportModal';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -122,6 +124,7 @@ export const OfflineAndPWAHub: React.FC<OfflineAndPWAHubProps> = ({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showManagerModal, setShowManagerModal] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showAabModal, setShowAabModal] = useState(false);
 
   const refreshCachedCount = async () => {
     const dbCount = await getOfflineCachedPagesCount();
@@ -426,11 +429,37 @@ export const OfflineAndPWAHub: React.FC<OfflineAndPWAHubProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Android AAB & Google Play Export Trigger Card */}
+                <div className="pt-2 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs text-stone-600">
+                    <strong className="text-stone-900">نشر التطبيق على Google Play:</strong>{' '}
+                    تحميل ملفات حزمة الأندرويد <code className="font-mono">.aab</code> وملف التوثيق الرقمي
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="open-aab-export-modal-btn"
+                    onClick={() => {
+                      setShowManagerModal(false);
+                      setShowAabModal(true);
+                    }}
+                    className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#78350F] hover:bg-[#78350F]/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>تجهيز وتصدير ملف AAB</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>,
           document.body
         )}
+
+      <AndroidAabExportModal
+        isOpen={showAabModal}
+        onClose={() => setShowAabModal(false)}
+      />
     </>
   );
 };
+

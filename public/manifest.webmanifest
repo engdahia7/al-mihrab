@@ -1,0 +1,66 @@
+{
+  "id": "./",
+  "name": "المحراب — مواقيت الصلاة والمصحف والأذكار الموثقة",
+  "short_name": "المحراب",
+  "description": "منصة إسلامية احترافية لمواقيت الصلاة الفلكية الدقيقة، المصحف الشريف بالرسم العثماني مع التفسير الميسر ومتتبع الختمة، والأذكار والأحاديث النبوية الصحيحة تعمل بدون إنترنت.",
+  "theme_color": "#14532D",
+  "background_color": "#FBF9F5",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "start_url": "./",
+  "scope": "./",
+  "dir": "rtl",
+  "lang": "ar",
+  "categories": ["books", "reference", "lifestyle", "education"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "المصحف الشريف والختمة",
+      "short_name": "المصحف",
+      "description": "فتح المصحف الشريف بالرسم العثماني ومتتبع الختمة",
+      "url": "./?tab=quran",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "مواقيت الصلاة والأذان",
+      "short_name": "المواقيت",
+      "description": "عرض مواقيت الصلاة الفلكية الدقيقة والعد التنازلي",
+      "url": "./?tab=prayers",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "أذكار المسلم والمنبّه",
+      "short_name": "الأذكار",
+      "description": "أذكار الصباح والمساء ومنبّه الأذكار المخصص",
+      "url": "./?tab=adhkar",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "الأدعية والأحاديث الصحيحة",
+      "short_name": "الأحاديث",
+      "description": "جوامع الدعاء وموسوعة الأحاديث النبوية الصحيحة",
+      "url": "./?tab=duas",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

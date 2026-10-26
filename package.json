@@ -11,8 +11,11 @@
     "test": "tsx --test src/utils/astronomy.test.ts src/utils/khatmahAndAlerts.test.ts src/utils/islamicFeatures.test.ts src/utils/offlineQuranStorage.test.ts src/utils/widgetEngine.test.ts src/utils/radioPlayer.test.ts src/utils/geolocationService.test.ts src/utils/quranStudyTools.test.ts",
     "clean": "rm -rf dist dev-dist server.js",
     "lint": "tsc --noEmit",
-    "twa:init": "npx @bubblewrap/cli init --manifest=/manifest.webmanifest",
-    "twa:build": "npx @bubblewrap/cli build"
+    "twa:init": "npx @bubblewrap/cli init --manifest=./twa-manifest.json",
+    "twa:build": "npx @bubblewrap/cli build",
+    "aab:keygen": "keytool -genkeypair -v -keystore android.keystore -alias almihrab-key -keyalg RSA -keysize 2048 -validity 10000 -dname \"CN=Al-Mihrab, OU=IslamicWaqf, O=AlMihrab, L=Makkah, S=Makkah, C=SA\"",
+    "aab:fingerprint": "keytool -list -v -keystore android.keystore -alias almihrab-key | grep SHA256",
+    "aab:build": "bash ./scripts/build-aab.sh"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
