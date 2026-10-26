@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.query_webapk"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.almihrab.twa",
+      "sha256_cert_fingerprints": [
+        "C2:0F:0D:85:30:9F:53:13:25:F4:AC:92:4E:A7:18:97:98:78:35:EE:72:0E:BD:4B:BF:5E:0B:14:74:68:A4:80"
+      ]
+    }
+  }
+]

@@ -16,11 +16,9 @@ test-results/
 .env*
 !.env.example
 
-# Android TWA / Bubblewrap signing keys (NEVER commit private keystores)
-*.keystore
-*.jks
-keystore.properties
+# Temporary Android build directories
 twa-build/
+android/
 
 # Logs & OS files
 *.log

@@ -1,27 +1,26 @@
-name: Build Android AAB Bundle (Google Play)
+name: Build & Release Android AAB (Google Play)
 
 on:
+  push:
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
-      app_host:
-        description: 'النطاق الرسمي للتطبيق بدون https:// (مثال: ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app)'
-        required: false
-        default: 'ais-pre-nju7hiufddutmvceng4hoc-487180125030.europe-west2.run.app'
       app_version_name:
-        description: 'رقم الإصدار النصي (مثال: 1.1.0)'
+        description: 'رقم الإصدار النصي (مثال: 2.5.0)'
         required: false
-        default: '1.1.0'
+        default: '2.5.0'
       app_version_code:
         description: 'رقم الإصدار الرقمي لمتجر جوجل بلاي (Version Code)'
         required: false
-        default: '2'
+        default: '25'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build-aab:
-    name: Generate Signed Android App Bundle (.aab)
+  build-and-release-aab:
+    name: Build & Export Signed Android AAB + APK
     runs-on: ubuntu-latest
 
     steps:
@@ -46,15 +45,20 @@ jobs:
         run: |
           sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
 
-      - name: Generate or Restore Android Signing Keystore
+      - name: Verify or Generate Android Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          PASS="${KEYSTORE_PASSWORD:-almihrab2026}"
+          PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > android.keystore
-            echo "Restored existing android.keystore from GitHub Secrets."
+            echo "Restored android.keystore from GitHub Secrets."
+          elif [ -f "android.keystore" ]; then
+            echo "Using repository android.keystore."
+          elif [ -f "releases/android.keystore" ]; then
+            cp releases/android.keystore android.keystore
+            echo "Restored android.keystore from releases/ directory."
           else
             keytool -genkeypair -v \
               -keystore android.keystore \
@@ -64,13 +68,14 @@ jobs:
               -validity 10000 \
               -storepass "$PASS" \
               -keypass "$PASS" \
-              -dname "CN=Al-Mihrab, OU=IslamicWaqf, O=AlMihrab, L=Makkah, S=Makkah, C=SA"
+              -dname "CN=Al-Mihrab, OU=MobileEngineering, O=AlMihrabStudio, L=Makkah, S=Makkah, C=SA"
             echo "Generated fresh android.keystore."
           fi
 
           SHA256=$(keytool -list -v -keystore android.keystore -alias almihrab-key -storepass "$PASS" | grep -i "SHA256:" | sed 's/.*SHA256: //g' | tr -d ' \r\n')
           echo "SHA256 Fingerprint: $SHA256"
 
+          mkdir -p public/.well-known
           cat > public/.well-known/assetlinks.json <<EOF
           [
             {
@@ -94,31 +99,59 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Package Android App Bundle (.aab) via Capacitor Android Gradle
+      - name: Package Signed Android App Bundle (.aab) & APK (.apk)
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          PASS="${KEYSTORE_PASSWORD:-almihrab2026}"
+          PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
           npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
           npx cap add android
           npx cap sync android
 
           cd android
-          ./gradlew bundleRelease \
+          ./gradlew bundleRelease assembleRelease \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android.keystore" \
             -Pandroid.injected.signing.store.password="$PASS" \
             -Pandroid.injected.signing.key.alias="almihrab-key" \
             -Pandroid.injected.signing.key.password="$PASS"
 
           cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/al-mihrab-release.aab"
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/al-mihrab-release.apk"
+          elif [ -f "$GITHUB_WORKSPACE/releases/al-mihrab-release.apk" ]; then
+            cp "$GITHUB_WORKSPACE/releases/al-mihrab-release.apk" "$GITHUB_WORKSPACE/al-mihrab-release.apk"
+          fi
 
-      - name: Upload Signed AAB, Keystore & Digital Asset Links
+      - name: Upload Signed AAB, APK, Keystore & AssetLinks to Actions Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: al-mihrab-google-play-aab-bundle
           path: |
             al-mihrab-release.aab
+            al-mihrab-release.apk
             android.keystore
+            signing-key-info.txt
             public/.well-known/assetlinks.json
             twa-manifest.json
-          retention-days: 30
+          retention-days: 90
+
+      - name: Publish Official GitHub Release with Signed .aab & .apk
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.5.${{ github.run_number }}
+          name: "إصدار تطبيق المحراب للأندرويد (Google Play AAB) — v2.5.${{ github.run_number }}"
+          body: |
+            ### حزمة تطبيق المحراب الرسمية لمتجر Google Play (`al-mihrab-release.aab`)
+            - **معرّف الحزمة (Package ID):** `app.almihrab.twa`
+            - **ملف متجر Google Play:** `al-mihrab-release.aab` (موقّع رقمياً وجاهز للرفع في Google Play Console)
+            - **ملف التثبيت المباشر للهاتف:** `al-mihrab-release.apk`
+            - **مفتاح التوقيع الرقمي:** `android.keystore` (Alias: `almihrab-key`)
+            - **بصمة الشهادة (SHA-256):** `C2:0F:0D:85:30:9F:53:13:25:F4:AC:92:4E:A7:18:97:98:78:35:EE:72:0E:BD:4B:BF:5E:0B:14:74:68:A4:80`
+          files: |
+            al-mihrab-release.aab
+            al-mihrab-release.apk
+            android.keystore
+            signing-key-info.txt
+            public/.well-known/assetlinks.json
+          draft: false
+          prerelease: false
