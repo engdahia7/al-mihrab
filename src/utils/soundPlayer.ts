@@ -1,5 +1,6 @@
 import {
   ALERT_SOUND_OPTIONS,
+  ADHKAR_REMINDER_SOUND_OPTIONS,
   AlertSoundId,
   AlertSoundSpec,
   getSanitizedAdhanTitleAr,
@@ -230,7 +231,7 @@ function playSynthesizedTone(spec: AlertSoundSpec) {
 }
 
 /**
- * Plays the locked primary Adhan audio (/assets/aistudio/6f509ec934a4_77c9e53d.mp3).
+ * Plays either a customizable acoustic spiritual reminder tone or the locked primary Adhan audio.
  */
 export async function playAlertSoundTone(
   soundId: AlertSoundId,
@@ -242,6 +243,15 @@ export async function playAlertSoundTone(
   }
 
   stopActiveAdhanAudio();
+
+  // Check if user selected a custom acoustic tone (e.g., for Adhkar reminders)
+  const acousticSpec = ADHKAR_REMINDER_SOUND_OPTIONS.find(
+    (s) => s.id === soundId && s.category === 'acoustic_tone'
+  );
+  if (acousticSpec) {
+    playSynthesizedTone(acousticSpec);
+    return;
+  }
 
   const spec = ALERT_SOUND_OPTIONS[0];
   const sourceUrl = PRIMARY_PINNED_ADHAN_URL;

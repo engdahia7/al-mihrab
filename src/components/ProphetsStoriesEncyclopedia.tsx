@@ -579,17 +579,21 @@ export const ProphetsStoriesEncyclopedia: React.FC<
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <span className="px-2 py-0.5 rounded-md bg-[#14532D]/10 text-[#14532D] text-[10px] font-bold">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500 font-semibold mb-0.5">
+                        <span className="font-bold text-[#14532D] font-tabular">
                           #{toArabicNumerals(prophet.orderNumber)}
                         </span>
                         {prophet.isUlulAzm && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 text-[10px] font-bold">
-                            من أولي العزم
-                          </span>
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-[#78350F] font-bold">
+                              من أولي العزم
+                            </span>
+                          </>
                         )}
-                        <span className="text-[10px] text-stone-500 font-semibold">
-                          · ذُكر {toArabicNumerals(prophet.mentionsCountInQuran)} مرة
+                        <span aria-hidden="true">·</span>
+                        <span className="font-tabular">
+                          ذُكر {toArabicNumerals(prophet.mentionsCountInQuran)} مرة
                         </span>
                       </div>
                       <h4 className="font-display text-base font-bold text-stone-950">
@@ -603,7 +607,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
                     <button
                       type="button"
                       onClick={() => setSelectedProphetId(prophet.id)}
-                      className="min-h-[30px] px-2.5 py-1 rounded-lg bg-[#F7F4EE] hover:bg-stone-200/70 border border-stone-200 text-[11px] font-bold text-stone-800 shrink-0 cursor-pointer"
+                      className="min-h-[30px] px-2.5 py-1 rounded-lg bg-[#F7F4EE] hover:bg-stone-200/70 border border-stone-200 text-[11px] font-bold text-stone-800 shrink-0 cursor-pointer whitespace-nowrap"
                     >
                       عرض التفصيل
                     </button>
@@ -613,7 +617,7 @@ export const ProphetsStoriesEncyclopedia: React.FC<
                     {prophet.lineageAndPeopleAr}
                   </p>
 
-                  <div className="p-2.5 rounded-xl bg-[#FCF9F2] border border-[#E5DAC3] space-y-1">
+                  <div className="pt-2 border-t border-stone-200/80 space-y-1">
                     <p className="font-quran text-sm sm:text-base text-stone-950 leading-relaxed">
                       {prophet.quranicDuaOrVerseAr}
                     </p>

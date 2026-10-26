@@ -22,11 +22,13 @@ import { sanitizeQuranicText } from '../utils/astronomy';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 import { ProphetsStoriesEncyclopedia } from './ProphetsStoriesEncyclopedia';
 import { SpecialPrayersAndIstikharaGuide } from './SpecialPrayersAndIstikharaGuide';
+import { PropheticHadithsEncyclopedia } from './PropheticHadithsEncyclopedia';
 
 const FAVORITE_DUAS_STORAGE_KEY = 'almihrab_favorite_duas_v1';
 
 export type DuasSectionId =
   | 'duas'
+  | 'hadiths'
   | 'prophets_stories'
   | 'istikhara_guide'
   | 'asma_husna';
@@ -35,14 +37,16 @@ interface DuasViewProps {
   onOpenMushafPage?: (pageNum: number) => void;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
   initialSection?: DuasSectionId;
+  navigationSignal?: number;
 }
 
 export const DuasView: React.FC<DuasViewProps> = ({
   onOpenMushafPage,
   onOpenDawahCard,
   initialSection,
+  navigationSignal,
 }) => {
-  // Primary Section Switcher: Authentic Duas | Prophets Stories (25) | Istikhara & Special Prayers | Asma Allah Al-Husna
+  // Primary Section Switcher: Authentic Duas | Prophetic Hadiths | Prophets Stories (25) | Istikhara & Special Prayers | Asma Allah Al-Husna
   const [activeSection, setActiveSection] = useState<DuasSectionId>(
     initialSection || 'duas'
   );
@@ -51,7 +55,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
     if (initialSection) {
       setActiveSection(initialSection);
     }
-  }, [initialSection]);
+  }, [initialSection, navigationSignal]);
 
   const [selectedTopic, setSelectedTopic] = useState<DuaTopicCategoryId>('all');
   const [originFilter, setOriginFilter] = useState<
@@ -83,13 +87,6 @@ export const DuasView: React.FC<DuasViewProps> = ({
       // ignore
     }
   }, [favoriteIds]);
-
-  const activeCategoryMeta = useMemo(() => {
-    return (
-      DUA_TOPIC_CATEGORIES.find((c) => c.id === selectedTopic) ||
-      DUA_TOPIC_CATEGORIES[0]
-    );
-  }, [selectedTopic]);
 
   const filteredDuas = useMemo(() => {
     return AUTHENTIC_DUAS_LIST.filter((dua) => {
@@ -164,10 +161,10 @@ export const DuasView: React.FC<DuasViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
-            الأدعية وقصص الأنبياء والأسماء الحسنى
+            الأدعية والأحاديث الصحيحة والأنبياء والأسماء الحسنى
           </h1>
           <p className="text-xs text-stone-500 mt-0.5">
-            جوامع الدعاء المأثور · موسوعة الأنبياء وأدعيتهم (٢٥) · مرشد الاستخارة والصلوات · الأسماء الحسنى (٩٩)
+            جوامع الدعاء المأثور · الأحاديث النبوية الصحيحة · موسوعة الأنبياء وأدعيتهم (٢٥) · مرشد الاستخارة · الأسماء الحسنى (٩٩)
           </p>
         </div>
 
@@ -190,11 +187,11 @@ export const DuasView: React.FC<DuasViewProps> = ({
         )}
       </div>
 
-      {/* Top 4-Section Switcher */}
+      {/* Top 5-Section Switcher */}
       <div
         role="tablist"
-        aria-label="أقسام الأدعية وقصص الأنبياء والاستخارة والأسماء الحسنى"
-        className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
+        aria-label="أقسام الأدعية والأحاديث وقصص الأنبياء والاستخارة والأسماء الحسنى"
+        className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-[#F4EFE6] border border-stone-200 rounded-xl"
       >
         <button
           type="button"
@@ -214,6 +211,21 @@ export const DuasView: React.FC<DuasViewProps> = ({
         <button
           type="button"
           role="tab"
+          data-testid="duas-tab-hadiths"
+          aria-selected={activeSection === 'hadiths'}
+          onClick={() => setActiveSection('hadiths')}
+          className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap ${
+            activeSection === 'hadiths'
+              ? 'bg-[#14532D] text-white shadow-xs'
+              : 'text-stone-700 hover:bg-stone-200/70'
+          }`}
+        >
+          <span>الأحاديث الصحيحة</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
           data-testid="duas-tab-prophets"
           aria-selected={activeSection === 'prophets_stories'}
           onClick={() => setActiveSection('prophets_stories')}
@@ -223,7 +235,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>قصص الأنبياء وأدعيتهم (٢٥)</span>
+          <span>قصص الأنبياء (٢٥)</span>
         </button>
 
         <button
@@ -238,7 +250,7 @@ export const DuasView: React.FC<DuasViewProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          <span>مرشد الاستخارة والصلوات</span>
+          <span>مرشد الاستخارة</span>
         </button>
 
         <button
@@ -256,6 +268,11 @@ export const DuasView: React.FC<DuasViewProps> = ({
           <span>الأسماء الحسنى (٩٩)</span>
         </button>
       </div>
+
+      {/* SECTION: AUTHENTIC PROPHETIC HADITHS ENCYCLOPEDIA */}
+      {activeSection === 'hadiths' && (
+        <PropheticHadithsEncyclopedia onOpenDawahCard={onOpenDawahCard} />
+      )}
 
       {/* SECTION: PROPHETS STORIES & QURANIC DUAS (25 PROPHETS) */}
       {activeSection === 'prophets_stories' && (

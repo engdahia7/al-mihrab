@@ -563,13 +563,14 @@ export const SpecialPrayersAndIstikharaGuide: React.FC<
         </div>
       </div>
 
-      {/* 4. Correcting Common Misconceptions About Istikhara + Personal Decision Journal */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Column A: 6 Scholarly Corrections of Common Istikhara Misconceptions */}
-        <div
-          data-testid="istikhara-misconceptions-section"
-          className="rounded-2xl bg-white border border-stone-200 p-4 sm:p-5 space-y-3"
-        >
+      {/* 4. Correcting Common Misconceptions About Istikhara + Personal Decision Journal (Shown on Istikhara Tab) */}
+      {selectedPrayerId === 'istikhara' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Column A: 6 Scholarly Corrections of Common Istikhara Misconceptions */}
+          <div
+            data-testid="istikhara-misconceptions-section"
+            className="rounded-2xl bg-white border border-stone-200 p-4 sm:p-5 space-y-3"
+          >
           <div className="flex items-center gap-2 border-b border-stone-200 pb-2.5">
             <HelpCircle className="w-4 h-4 text-[#78350F] shrink-0" />
             <div>
@@ -762,6 +763,7 @@ export const SpecialPrayersAndIstikharaGuide: React.FC<
           </div>
         </div>
       </div>
+      )}
     </section>
   );
 };

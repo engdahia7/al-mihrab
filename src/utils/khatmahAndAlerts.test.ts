@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {
   calculateKhatmahStats,
   getJuzForPage,
+  getFirstPageOfJuz,
+  getLastPageOfJuz,
+  computeDaysUntilTargetDate,
+  computeTargetDateISOFromDays,
   computePrayerAlertTimes,
   getDefaultPrayerAlertsConfig,
   checkActivePrayerAlert,
@@ -11,8 +15,17 @@ import {
   formatAudioDurationMMSS,
   getSanitizedAdhanTitleAr,
   ALERT_SOUND_OPTIONS,
+  ADHKAR_REMINDER_SOUND_OPTIONS,
+  REMINDER_SELECTABLE_ADHKAR,
+  getDefaultAdhkarRemindersConfig,
+  evaluateAdhkarReminderForMinute,
   TOTAL_MUSHAF_PAGES,
 } from './khatmahAndAlerts.ts';
+import {
+  AUTHENTIC_HADITHS_LIST,
+  HADITH_TOPICS,
+  searchAuthenticHadiths,
+} from '../data/hadithsData.ts';
 import {
   evaluateScheduledNotificationsForMinute,
   getDefaultPushChannelsConfig,
@@ -251,6 +264,111 @@ test('setAllPushChannelsState and buildChannelSpecificNotification handle bulk t
   assert.equal(upcoming?.timeHHMM, '11:58');
   assert.equal(upcoming?.remainingMinutes, 18);
 });
+
+test('getFirstPageOfJuz, getLastPageOfJuz, and targetDateISO Khatmah calculations work accurately', () => {
+  assert.equal(getFirstPageOfJuz(1), 1);
+  assert.equal(getLastPageOfJuz(1), 21);
+  assert.equal(getFirstPageOfJuz(2), 22);
+  assert.equal(getLastPageOfJuz(2), 41);
+  assert.equal(getFirstPageOfJuz(30), 582);
+  assert.equal(getLastPageOfJuz(30), 604);
+
+  const targetDate = computeTargetDateISOFromDays(10, '2026-10-01');
+  assert.equal(targetDate, '2026-10-11');
+  assert.equal(computeDaysUntilTargetDate('2026-10-11', '2026-10-01'), 10);
+
+  // Logging Juz 15 completion -> page 301
+  const juz15EndPage = getLastPageOfJuz(15);
+  assert.equal(juz15EndPage, 301);
+
+  const statsWithDate = calculateKhatmahStats(
+    {
+      targetDays: 10,
+      currentPage: juz15EndPage,
+      startDateISO: '2026-10-01',
+      targetDateISO: '2026-10-11',
+      completedKhatmahsCount: 0,
+      logs: [],
+    },
+    '2026-10-01'
+  );
+
+  assert.equal(statsWithDate.completionPercent, Math.round((301 / 604) * 100)); // 50%
+  assert.equal(statsWithDate.completedJuzCount, 15);
+  assert.equal(statsWithDate.daysUntilTargetDate, 10);
+  assert.equal(statsWithDate.targetDateISO, '2026-10-11');
+  assert.equal(statsWithDate.dailyTargetPages, Math.ceil((604 - 301) / 10)); // 31 pages/day
+});
+
+test('evaluateAdhkarReminderForMinute supports specific times, intervals, selected Adhkar, and custom sound tones', () => {
+  assert.ok(ADHKAR_REMINDER_SOUND_OPTIONS.length >= 5);
+  assert.ok(REMINDER_SELECTABLE_ADHKAR.length >= 8);
+
+  const defaultCfg = getDefaultAdhkarRemindersConfig();
+  assert.equal(defaultCfg.enabled, true);
+  assert.equal(defaultCfg.scheduleMode, 'specific_times');
+
+  // Specific time match at 07:00
+  const hit0700 = evaluateAdhkarReminderForMinute(
+    {
+      ...defaultCfg,
+      selectedDhikrIds: ['rem-istighfar'],
+      specificTimesHHMM: ['07:00', '17:30'],
+      soundId: 'fajr_serenity',
+    },
+    '07:00'
+  );
+  assert.notEqual(hit0700, null);
+  assert.equal(hit0700?.dhikr.id, 'rem-istighfar');
+  assert.equal(hit0700?.soundId, 'fajr_serenity');
+
+  // Non-matching time returns null
+  const miss0705 = evaluateAdhkarReminderForMinute(defaultCfg, '07:05');
+  assert.equal(miss0705, null);
+
+  // Interval mode (every 30 minutes)
+  const hitInterval = evaluateAdhkarReminderForMinute(
+    {
+      ...defaultCfg,
+      scheduleMode: 'interval',
+      intervalMinutes: 30,
+      selectedDhikrIds: ['rem-salawat'],
+      soundId: 'tasbih_bell',
+    },
+    '08:30'
+  );
+  assert.notEqual(hitInterval, null);
+  assert.equal(hitInterval?.dhikr.id, 'rem-salawat');
+  assert.equal(hitInterval?.soundId, 'tasbih_bell');
+});
+
+test('searchAuthenticHadiths filters by topic, narrator, takhrij, and diacritic-free Arabic text', () => {
+  assert.ok(HADITH_TOPICS.length >= 8);
+  assert.ok(AUTHENTIC_HADITHS_LIST.length >= 15);
+
+  // Every hadith has narratorAr and takhrijAr
+  for (const h of AUTHENTIC_HADITHS_LIST) {
+    assert.ok(h.narratorAr.length > 3);
+    assert.ok(h.takhrijAr.length > 5);
+    assert.ok(h.hadithArabicText.length > 10);
+  }
+
+  // Topic filter: patience
+  const patienceList = searchAuthenticHadiths('', 'patience');
+  assert.ok(patienceList.length >= 3);
+  assert.ok(patienceList.every((h) => h.topicId === 'patience'));
+
+  // Search by narrator without diacritics
+  const suhaibResults = searchAuthenticHadiths('صهيب بن سنان', 'all');
+  assert.ok(suhaibResults.length >= 1);
+  assert.equal(suhaibResults[0].id, 'hadith-patience-1');
+
+  // Search by phrase in hadith
+  const niyyahResults = searchAuthenticHadiths('انما الاعمال بالنيات', 'all');
+  assert.ok(niyyahResults.length >= 1);
+  assert.equal(niyyahResults[0].topicId, 'faith');
+});
+
 
 
 

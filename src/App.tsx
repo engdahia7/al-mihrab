@@ -56,9 +56,19 @@ import {
   dispatchSystemAndInAppNotification,
   type DispatchedIslamicNotification,
 } from './utils/notificationDispatcher';
-import { getDefaultPrayerAlertsConfig } from './utils/khatmahAndAlerts';
-import { stopActiveAdhanAudio } from './utils/soundPlayer';
+import {
+  getDefaultPrayerAlertsConfig,
+  loadAdhkarRemindersConfig,
+  evaluateAdhkarReminderForMinute,
+} from './utils/khatmahAndAlerts';
+import {
+  stopActiveAdhanAudio,
+  playAlertSoundTone,
+} from './utils/soundPlayer';
 import type { PrayersSubScreen } from './components/PrayerTimesView';
+import type { WorshipHubSubSection } from './components/WorshipAndQadaHub';
+import type { DuasSectionId } from './components/DuasView';
+import type { QiblaSubTab } from './components/QiblaAndSourcesView';
 
 export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
 
@@ -226,6 +236,13 @@ export default function App() {
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
   const [prayersInitialSubScreen, setPrayersInitialSubScreen] =
     useState<PrayersSubScreen | undefined>(undefined);
+  const [prayersInitialWorshipSubSection, setPrayersInitialWorshipSubSection] =
+    useState<WorshipHubSubSection | undefined>(undefined);
+  const [duasInitialSection, setDuasInitialSection] =
+    useState<DuasSectionId | undefined>(undefined);
+  const [qiblaInitialSubTab, setQiblaInitialSubTab] =
+    useState<QiblaSubTab | undefined>(undefined);
+  const [navigationSignal, setNavigationSignal] = useState<number>(0);
   const [activePushBanner, setActivePushBanner] =
     useState<DispatchedIslamicNotification | null>(null);
 
@@ -235,9 +252,8 @@ export default function App() {
     });
   }, []);
 
-  // Global background notification scheduler when user is browsing other tabs (Quran, Adhkar, Duas, Qibla)
+  // Global background notification scheduler for Prayer Alerts (outside prayers tab) & Custom Adhkar Reminders (all tabs)
   useEffect(() => {
-    if (activeTab === 'prayers') return;
     let lastMin = '';
     const checkSchedule = () => {
       const now = new Date();
@@ -246,6 +262,34 @@ export default function App() {
       const currentHHMM = `${hh}:${mm}`;
       if (currentHHMM === lastMin) return;
       lastMin = currentHHMM;
+
+      // 1. Evaluate custom Adhkar reminders across all tabs
+      const adhkarRemCfg = loadAdhkarRemindersConfig();
+      const adhkarTriggered = evaluateAdhkarReminderForMinute(
+        adhkarRemCfg,
+        currentHHMM,
+        now.getDate()
+      );
+      if (adhkarTriggered) {
+        playAlertSoundTone(
+          adhkarTriggered.soundId,
+          adhkarTriggered.dhikr.titleAr
+        ).catch(() => {});
+        dispatchSystemAndInAppNotification({
+          id: `adhkar-sched-${currentHHMM}-${Date.now()}`,
+          category: 'ADHKAR_MORNING',
+          titleAr: `${adhkarTriggered.triggerReasonAr} · ${adhkarTriggered.dhikr.titleAr}`,
+          bodyAr: adhkarTriggered.dhikr.dhikrTextAr,
+          subtitleOrHadithAr: adhkarTriggered.dhikr.virtueBriefAr,
+          timestampHHMM: currentHHMM,
+          createdAtMs: Date.now(),
+          shouldPlayFullAdhan: adhkarTriggered.soundId === 'custom_file',
+          actionLabelAr: 'فتح الأذكار الآن',
+          actionTab: 'adhkar',
+        }).catch(() => {});
+      }
+
+      if (activeTab === 'prayers') return;
 
       const times = calculateAstronomicalPrayerTimes(
         now,
@@ -306,6 +350,7 @@ export default function App() {
       nextInfo.nextPrayerTime
     );
     setPrayersInitialSubScreen('alerts');
+    setNavigationSignal((n) => n + 1);
     handleSelectTab('prayers');
   };
 
@@ -497,10 +542,9 @@ export default function App() {
               onClick={() => void handleHeaderBellClick()}
               aria-label="تفعيل وتجربة دفع الإشعارات الفورية"
               title="إرسال إشعار فوري وفتح إعدادات التنبيهات"
-              className="p-1.5 rounded-lg bg-[#F7F4EE] border border-stone-200 text-stone-700 hover:text-[#14532D] cursor-pointer relative"
+              className="p-1.5 rounded-lg bg-[#F7F4EE] border border-stone-200 text-stone-700 hover:text-[#14532D] cursor-pointer"
             >
               <Bell className="w-4 h-4 text-[#14532D]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-[#14532D] absolute top-1 right-1" />
             </button>
             <button
               type="button"
@@ -696,8 +740,14 @@ export default function App() {
             onChangeAsrMethod={setAsrMethod}
             hijriAdjustment={hijriAdjustment}
             onNavigateTab={handleSelectTab}
+            onOpenMushafPage={(pageNum) => {
+              setTargetMushafPage(pageNum);
+              handleSelectTab('quran');
+            }}
             onOpenDawahCard={handleOpenDawahCard}
             initialSubScreen={prayersInitialSubScreen}
+            initialWorshipSubSection={prayersInitialWorshipSubSection}
+            navigationSignal={navigationSignal}
           />
         )}
 
@@ -725,6 +775,8 @@ export default function App() {
               handleSelectTab('quran');
             }}
             onOpenDawahCard={handleOpenDawahCard}
+            initialSection={duasInitialSection}
+            navigationSignal={navigationSignal}
           />
         )}
 
@@ -737,6 +789,8 @@ export default function App() {
             }}
             hijriAdjustment={hijriAdjustment}
             onChangeHijriAdjustment={setHijriAdjustment}
+            initialSubTab={qiblaInitialSubTab}
+            navigationSignal={navigationSignal}
           />
         )}
       </main>
@@ -885,6 +939,24 @@ export default function App() {
         }}
         onOpenDawahCard={handleOpenDawahCard}
         onOpenWaqfModal={handleOpenWaqfModal}
+        onNavigateDuasSection={(section) => {
+          setDuasInitialSection(section);
+          setNavigationSignal((n) => n + 1);
+          handleSelectTab('duas');
+        }}
+        onNavigatePrayersSubScreen={(subScreen, worshipSubSection) => {
+          setPrayersInitialSubScreen(subScreen);
+          if (worshipSubSection) {
+            setPrayersInitialWorshipSubSection(worshipSubSection);
+          }
+          setNavigationSignal((n) => n + 1);
+          handleSelectTab('prayers');
+        }}
+        onNavigateQiblaSubTab={(subTab) => {
+          setQiblaInitialSubTab(subTab);
+          setNavigationSignal((n) => n + 1);
+          handleSelectTab('qibla');
+        }}
       />
     </div>
   );

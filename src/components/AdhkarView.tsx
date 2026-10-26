@@ -36,6 +36,7 @@ import {
   stopActiveAdhanAudio,
 } from '../utils/soundPlayer';
 import { RuqyahAndSleepAudioPanel } from './RuqyahAndSleepAudioPanel';
+import { AdhkarRemindersPanel } from './AdhkarRemindersPanel';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
 const ADHKAR_PROGRESS_KEY = 'almihrab_adhkar_progress_v1';
@@ -54,6 +55,7 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] =
     useState<AdhkarCategoryId>('morning');
+  const [showRemindersPanel, setShowRemindersPanel] = useState<boolean>(false);
   const [ruqyahAutoStartSignal, setRuqyahAutoStartSignal] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [mobileFocusMode, setMobileFocusMode] = useState<'adhkar' | 'masbaha'>(
@@ -347,10 +349,27 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
     <div className="space-y-5 sm:space-y-7">
       {/* Header & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900">
             الأذكار والمسبحة
           </h1>
+          <button
+            type="button"
+            data-testid="toggle-adhkar-reminders-panel-btn"
+            onClick={() => setShowRemindersPanel((prev) => !prev)}
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors border ${
+              showRemindersPanel
+                ? 'bg-[#78350F] text-white border-[#78350F]'
+                : 'bg-[#FAF5E8] hover:bg-[#EFE4CE] text-[#78350F] border-[#C8B696]'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>
+              {showRemindersPanel
+                ? 'إخفاء إعدادات التذكير'
+                : 'نظام تذكير الأذكار المخصّص'}
+            </span>
+          </button>
           <button
             type="button"
             data-testid="quick-play-full-ruqyah-once-btn"
@@ -381,6 +400,16 @@ export const AdhkarView: React.FC<AdhkarViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Customizable Adhkar Reminder System Panel */}
+      {showRemindersPanel && (
+        <AdhkarRemindersPanel
+          onSelectCategory={(catId) => {
+            setActiveCategory(catId as AdhkarCategoryId);
+            setMobileFocusMode('adhkar');
+          }}
+        />
+      )}
 
       {/* Contextual Fajr Wake-Up Alarm Bar (Shown only in Waking Adhkar or when actively ringing) */}
       {(activeCategory === 'waking' || isFajrAlarmRinging) && (

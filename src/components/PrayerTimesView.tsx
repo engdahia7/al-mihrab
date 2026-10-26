@@ -26,7 +26,6 @@ import {
 import {
   PrayerAlertItemConfig,
   getDefaultPrayerAlertsConfig,
-  checkActivePrayerAlert,
 } from '../utils/khatmahAndAlerts';
 import {
   playAlertSoundTone,
@@ -72,6 +71,7 @@ interface PrayerTimesViewProps {
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
   initialSubScreen?: PrayersSubScreen;
   initialWorshipSubSection?: WorshipHubSubSection;
+  navigationSignal?: number;
 }
 
 export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
@@ -87,6 +87,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
   onOpenDawahCard,
   initialSubScreen,
   initialWorshipSubSection,
+  navigationSignal,
 }) => {
   const [now, setNow] = useState<Date>(() => new Date());
   const [activeSubScreen, setActiveSubScreen] =
@@ -96,7 +97,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
     if (initialSubScreen) {
       setActiveSubScreen(initialSubScreen);
     }
-  }, [initialSubScreen]);
+  }, [initialSubScreen, navigationSignal]);
   const [showAdvancedSettings, setShowAdvancedSettings] =
     useState<boolean>(false);
   const [showMonthlyTable, setShowMonthlyTable] = useState<boolean>(false);
@@ -286,8 +287,6 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const currentMethodSpec = CALCULATION_METHODS[methodId];
 
   // Automatically trigger Push Notifications & Adhan audio when current HH:MM matches an enabled schedule
   useEffect(() => {
@@ -794,6 +793,7 @@ export const PrayerTimesView: React.FC<PrayerTimesViewProps> = ({
           hijriMonthNameAr={hijriDate.monthNameAr}
           onOpenDawahCard={onOpenDawahCard}
           initialSubSection={initialWorshipSubSection}
+          navigationSignal={navigationSignal}
         />
       )}
 

@@ -174,7 +174,7 @@ export const OfflineAndPWAHub: React.FC<OfflineAndPWAHubProps> = ({
             refreshCachedCount();
             setShowManagerModal(true);
           }}
-          className={`min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+          className={`min-h-[36px] px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
             summary.isFullyCached
               ? 'bg-[#14532D]/10 border-[#14532D]/30 text-[#14532D]'
               : 'bg-[#F7F4EE] border-stone-300 text-stone-800 hover:bg-stone-200/70'

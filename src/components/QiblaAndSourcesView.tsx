@@ -12,7 +12,6 @@ import {
   calculateDistanceToKaaba,
   getCardinalDirectionAr,
   gregorianToHijri,
-  KAABA_COORDS,
 } from '../utils/astronomy';
 import {
   calculateTawafOrSaiLapInfo,
@@ -30,11 +29,19 @@ import {
   computeQiblaCompassAlignment,
 } from '../utils/geolocationService';
 
+export type QiblaSubTab =
+  | 'qibla_mosques'
+  | 'hajj_umrah'
+  | 'inheritance'
+  | 'hijri_sources';
+
 interface QiblaAndSourcesViewProps {
   selectedCity: CityLocation;
   onSelectCity: (city: CityLocation) => void;
   hijriAdjustment: number;
   onChangeHijriAdjustment: (adj: number) => void;
+  initialSubTab?: QiblaSubTab;
+  navigationSignal?: number;
 }
 
 const MANASIK_STORAGE_KEY = 'almihrab_manasik_checklist_v1';
@@ -87,11 +94,19 @@ export const QiblaAndSourcesView: React.FC<QiblaAndSourcesViewProps> = ({
   onSelectCity,
   hijriAdjustment,
   onChangeHijriAdjustment,
+  initialSubTab,
+  navigationSignal,
 }) => {
   // 4 Sub-Sections: Qibla & Mosques | Hajj & Umrah Mutawif | Inheritance Calculator | Hijri & Sources
-  const [activeSubTab, setActiveSubTab] = useState<
-    'qibla_mosques' | 'hajj_umrah' | 'inheritance' | 'hijri_sources'
-  >('qibla_mosques');
+  const [activeSubTab, setActiveSubTab] = useState<QiblaSubTab>(
+    initialSubTab || 'qibla_mosques'
+  );
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab, navigationSignal]);
 
   // Hajj & Umrah Mutawif State
   const [ritualType, setRitualType] = useState<'tawaf' | 'sai'>('tawaf');

@@ -11,6 +11,10 @@ import {
   KhatmahPlanState,
   KhatmahLogEntry,
   calculateKhatmahStats,
+  getFirstPageOfJuz,
+  getLastPageOfJuz,
+  computeDaysUntilTargetDate,
+  computeTargetDateISOFromDays,
   TOTAL_MUSHAF_PAGES,
 } from '../utils/khatmahAndAlerts';
 import {
@@ -33,6 +37,7 @@ const DEFAULT_KHATMAH_STATE: KhatmahPlanState = {
   targetDays: 30,
   currentPage: 40,
   startDateISO: new Date().toISOString().slice(0, 10),
+  targetDateISO: computeTargetDateISOFromDays(30),
   completedKhatmahsCount: 1,
   logs: [
     {
@@ -127,6 +132,16 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
   );
   const [copiedGroupReport, setCopiedGroupReport] = useState<boolean>(false);
 
+  // Logging mode: 'by_page' (تسجيل الصفحة التي وصلت إليها), 'by_juz' (تسجيل الجزء الذي وصلت إليه), or 'add_pages' (إضافة عدد صفحات مقروءة)
+  const [progressInputMode, setProgressInputMode] = useState<
+    'by_page' | 'by_juz' | 'add_pages'
+  >('by_page');
+  const [reachedPageInput, setReachedPageInput] = useState<string>(
+    String(plan.currentPage || 1)
+  );
+  const [reachedJuzInput, setReachedJuzInput] = useState<number>(() =>
+    Math.max(1, Math.min(30, Math.ceil((plan.currentPage || 20) / 20)))
+  );
   const [pagesInput, setPagesInput] = useState<string>('20');
   const [customTargetDays, setCustomTargetDays] = useState<string>(
     String(plan.targetDays)
@@ -162,12 +177,106 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
   );
 
   const handleSetTargetDays = (days: number) => {
-    const safeDays = Math.max(3, Math.min(365, days));
+    const safeDays = Math.max(1, Math.min(365, days));
+    const nextDateISO = computeTargetDateISOFromDays(safeDays);
     setCustomTargetDays(String(safeDays));
     setPlan((prev) => ({
       ...prev,
       targetDays: safeDays,
+      targetDateISO: nextDateISO,
     }));
+  };
+
+  const handleSetTargetDateISO = (dateISO: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) return;
+    const daysLeft = computeDaysUntilTargetDate(dateISO);
+    setCustomTargetDays(String(daysLeft));
+    setPlan((prev) => ({
+      ...prev,
+      targetDateISO: dateISO,
+      targetDays: daysLeft,
+    }));
+  };
+
+  const handleSetReachedPage = (targetPage: number, customNote?: string) => {
+    const clampedPage = Math.max(
+      1,
+      Math.min(TOTAL_MUSHAF_PAGES, Math.round(targetPage))
+    );
+    setReachedPageInput(String(clampedPage));
+    setPlan((prev) => {
+      const fromPage = Math.max(1, Math.min(clampedPage, prev.currentPage + 1));
+      const deltaPages = Math.max(1, Math.abs(clampedPage - prev.currentPage));
+      const entry: KhatmahLogEntry = {
+        id: `log-${Date.now()}`,
+        dateISO: new Date().toISOString().slice(0, 10),
+        dateLabelAr: new Date().toLocaleDateString('ar-SA', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        }),
+        pagesReadCount: deltaPages,
+        fromPage,
+        toPage: clampedPage,
+        noteAr:
+          customNote ||
+          noteInput.trim() ||
+          `الوصول إلى الصفحة ${toArabicNumerals(clampedPage)}`,
+      };
+      const isNowComplete =
+        clampedPage >= TOTAL_MUSHAF_PAGES && prev.currentPage < TOTAL_MUSHAF_PAGES;
+      return {
+        ...prev,
+        currentPage: clampedPage,
+        completedKhatmahsCount: isNowComplete
+          ? prev.completedKhatmahsCount + 1
+          : prev.completedKhatmahsCount,
+        logs: [entry, ...prev.logs.slice(0, 29)],
+      };
+    });
+    setNoteInput('');
+  };
+
+  const handleSetReachedJuz = (juzNum: number) => {
+    const safeJuz = Math.max(1, Math.min(30, Math.round(juzNum)));
+    setReachedJuzInput(safeJuz);
+    const startPage = getFirstPageOfJuz(safeJuz);
+    const endPage = getLastPageOfJuz(safeJuz);
+    const juzName = JUZ_NAMES_AR[safeJuz] || `الجزء ${toArabicNumerals(safeJuz)}`;
+    setReachedPageInput(String(endPage));
+
+    setPlan((prev) => {
+      const deltaPages = Math.max(
+        endPage - startPage + 1,
+        Math.abs(endPage - prev.currentPage)
+      );
+      const entry: KhatmahLogEntry = {
+        id: `log-${Date.now()}`,
+        dateISO: new Date().toISOString().slice(0, 10),
+        dateLabelAr: new Date().toLocaleDateString('ar-SA', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        }),
+        pagesReadCount: deltaPages,
+        fromPage: startPage,
+        toPage: endPage,
+        noteAr:
+          noteInput.trim() ||
+          `إتمام ${juzName} (ص ${toArabicNumerals(startPage)} - ${toArabicNumerals(endPage)})`,
+      };
+      const isNowComplete =
+        endPage >= TOTAL_MUSHAF_PAGES && prev.currentPage < TOTAL_MUSHAF_PAGES;
+      return {
+        ...prev,
+        currentPage: endPage,
+        completedKhatmahsCount: isNowComplete
+          ? prev.completedKhatmahsCount + 1
+          : prev.completedKhatmahsCount,
+        logs: [entry, ...prev.logs.slice(0, 29)],
+      };
+    });
+    setNoteInput('');
   };
 
   const handleLogReading = (pagesToAdd: number, customNote?: string) => {
@@ -180,6 +289,7 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
       const toPage = Math.min(TOTAL_MUSHAF_PAGES, prev.currentPage + validPages);
       const actualAdded = Math.max(0, toPage - prev.currentPage);
       if (actualAdded === 0) return prev;
+      setReachedPageInput(String(toPage));
 
       const entry: KhatmahLogEntry = {
         id: `log-${Date.now()}`,
@@ -212,6 +322,8 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
   };
 
   const handleResetNewKhatmah = () => {
+    setReachedPageInput('1');
+    setReachedJuzInput(1);
     setPlan((prev) => ({
       ...prev,
       currentPage: 0,
@@ -321,7 +433,7 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
               : 'text-stone-700 hover:bg-stone-200/70'
           }`}
         >
-          الختمة الفردية (بالصفحات)
+          الختمة الفردية (بالصفحة أو الجزء)
         </button>
 
         <button
@@ -346,32 +458,43 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="text-xs font-semibold text-[#14532D] block">
-                  متابعة الختمة القرآنية · مصحف المدينة (٦٠٤ صفحات)
+                  متابعة ختم القرآن الكريم · مصحف المدينة (٦٠٤ صفحات · ٣٠ جزءاً)
                 </span>
-                <h3 className="font-display text-lg sm:text-xl font-bold text-stone-900 mt-0.5">
-                  نسبة الإنجاز: {toArabicNumerals(stats.completionPercent)}٪ · الجزء{' '}
+                <h3
+                  data-testid="khatmah-completion-percent"
+                  className="font-display text-lg sm:text-xl font-bold text-stone-900 mt-0.5"
+                >
+                  نسبة الإنجاز: {toArabicNumerals(stats.completionPercent)}٪ · الصفحة{' '}
+                  {toArabicNumerals(plan.currentPage)} · الجزء{' '}
                   {toArabicNumerals(stats.currentJuz)} من ٣٠
                 </h3>
               </div>
-              <span className="text-xs font-semibold text-[#78350F]">
-                الختمات المكتملة: {toArabicNumerals(plan.completedKhatmahsCount)}
-              </span>
+              <div className="text-left">
+                <span className="text-xs font-semibold text-[#78350F] block">
+                  الختمات المكتملة: {toArabicNumerals(plan.completedKhatmahsCount)}
+                </span>
+                <span className="text-[11px] text-stone-500 block">
+                  التاريخ المستهدف: {stats.targetDateISO}
+                </span>
+              </div>
             </div>
 
             {/* Visual Progress Bar */}
             <div className="space-y-1.5">
-              <div className="w-full h-2.5 bg-stone-200 rounded-full overflow-hidden">
+              <div className="w-full h-3 bg-stone-200 rounded-full overflow-hidden">
                 <div
+                  data-testid="khatmah-progress-bar-fill"
                   className="h-full bg-[#14532D] transition-all duration-300"
                   style={{ width: `${stats.completionPercent}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-xs text-stone-600">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600">
                 <span>
-                  المقروء: {toArabicNumerals(stats.pagesRead)} صفحة · آخر صفحة:{' '}
-                  {toArabicNumerals(plan.currentPage)}
+                  المقروء: {toArabicNumerals(stats.pagesRead)} من ٦٠٤ صفحات ({toArabicNumerals(stats.completedJuzCount)} جزءاً مكتملاً)
                 </span>
-                <span>المتبقي: {toArabicNumerals(stats.pagesRemaining)} صفحة</span>
+                <span>
+                  المتبقي: {toArabicNumerals(stats.pagesRemaining)} صفحة ({toArabicNumerals(30 - stats.completedJuzCount)} جزءاً)
+                </span>
               </div>
             </div>
 
@@ -396,21 +519,21 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-[11px] text-stone-500 block">الأيام المقدرة للختم</span>
+                <span className="text-[11px] text-stone-500 block">المتبقي للتاريخ المستهدف</span>
                 <span className="font-tabular tabular-nums text-base font-bold text-[#78350F] mt-0.5 block">
-                  {toArabicNumerals(stats.estimatedDaysLeft)} يوماً
+                  {toArabicNumerals(stats.daysUntilTargetDate)} يوماً
                 </span>
               </div>
             </div>
           </div>
 
-          {/* 2-Column Grid: Target Duration & Daily Reading Logger */}
+          {/* 2-Column Grid: Log Reached Page/Juz & Target Date Setting */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Left 6 Cols: Log Today's Reading */}
+            {/* Left 6 Cols: Log Reached Page OR Juz */}
             <div className="lg:col-span-6 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                 <h4 className="font-display text-base font-bold text-stone-900">
-                  تسجيل القراءة اليومية
+                  تسجيل الصفحة أو الجزء الذي وصلت إليه
                 </h4>
                 <button
                   type="button"
@@ -422,8 +545,221 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                 </button>
               </div>
 
+              {/* 3-Mode Input Switcher: By Page | By Juz | Add Daily Pages */}
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl">
+                <button
+                  type="button"
+                  data-testid="khatmah-log-mode-page"
+                  onClick={() => setProgressInputMode('by_page')}
+                  className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    progressInputMode === 'by_page'
+                      ? 'bg-[#14532D] text-white'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  بالصفحة (١-٦٠٤)
+                </button>
+                <button
+                  type="button"
+                  data-testid="khatmah-log-mode-juz"
+                  onClick={() => setProgressInputMode('by_juz')}
+                  className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    progressInputMode === 'by_juz'
+                      ? 'bg-[#14532D] text-white'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  بالجزء (١-٣٠)
+                </button>
+                <button
+                  type="button"
+                  data-testid="khatmah-log-mode-add"
+                  onClick={() => setProgressInputMode('add_pages')}
+                  className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    progressInputMode === 'add_pages'
+                      ? 'bg-[#14532D] text-white'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  إضافة صفحات اليوم
+                </button>
+              </div>
+
+              {progressInputMode === 'by_page' && (
+                <div className="space-y-3" data-testid="khatmah-by-page-box">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label
+                        htmlFor="khatmah-reached-page-input"
+                        className="block text-xs font-semibold text-stone-700 mb-1"
+                      >
+                        الصفحة التي وصلت إليها (١ إلى ٦٠٤):
+                      </label>
+                      <input
+                        id="khatmah-reached-page-input"
+                        data-testid="khatmah-reached-page-input"
+                        type="number"
+                        min={1}
+                        max={604}
+                        value={reachedPageInput}
+                        onChange={(e) => setReachedPageInput(e.target.value)}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs font-bold bg-[#FBF9F5] border border-stone-300 rounded-xl font-tabular tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="khatmah-page-note-input"
+                        className="block text-xs text-stone-600 mb-1"
+                      >
+                        ملاحظة الورد (اختياري):
+                      </label>
+                      <input
+                        id="khatmah-page-note-input"
+                        type="text"
+                        placeholder="مثال: توقفت عند نهاية الحزب"
+                        value={noteInput}
+                        onChange={(e) => setNoteInput(e.target.value)}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="khatmah-save-page-btn"
+                    onClick={() => {
+                      const parsed = parseInt(reachedPageInput, 10);
+                      if (Number.isFinite(parsed) && parsed >= 1) {
+                        handleSetReachedPage(parsed);
+                      }
+                    }}
+                    className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>حفظ الوصول إلى الصفحة ({toArabicNumerals(reachedPageInput || 1)})</span>
+                  </button>
+                </div>
+              )}
+
+              {progressInputMode === 'by_juz' && (
+                <div className="space-y-3" data-testid="khatmah-by-juz-box">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label
+                        htmlFor="khatmah-reached-juz-select"
+                        className="block text-xs font-semibold text-stone-700 mb-1"
+                      >
+                        اختر الجزء الذي أتممته (١ إلى ٣٠):
+                      </label>
+                      <select
+                        id="khatmah-reached-juz-select"
+                        data-testid="khatmah-reached-juz-select"
+                        value={reachedJuzInput}
+                        onChange={(e) => setReachedJuzInput(Number(e.target.value))}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs font-bold bg-[#FBF9F5] border border-stone-300 rounded-xl text-stone-900"
+                      >
+                        {Array.from({ length: 30 }, (_, idx) => {
+                          const jNum = idx + 1;
+                          const sPage = getFirstPageOfJuz(jNum);
+                          const ePage = getLastPageOfJuz(jNum);
+                          return (
+                            <option key={jNum} value={jNum}>
+                              الجزء {toArabicNumerals(jNum)} — {JUZ_NAMES_AR[jNum]} (ص{' '}
+                              {toArabicNumerals(sPage)} - {toArabicNumerals(ePage)})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="khatmah-juz-note-input"
+                        className="block text-xs text-stone-600 mb-1"
+                      >
+                        ملاحظة الورد (اختياري):
+                      </label>
+                      <input
+                        id="khatmah-juz-note-input"
+                        type="text"
+                        placeholder="مثال: قراءة الجزء بعد الفجر"
+                        value={noteInput}
+                        onChange={(e) => setNoteInput(e.target.value)}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="khatmah-save-juz-btn"
+                    onClick={() => handleSetReachedJuz(reachedJuzInput)}
+                    className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>
+                      حفظ إتمام الجزء {toArabicNumerals(reachedJuzInput)} (حتى صفحة{' '}
+                      {toArabicNumerals(getLastPageOfJuz(reachedJuzInput))})
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {progressInputMode === 'add_pages' && (
+                <div className="space-y-3" data-testid="khatmah-add-pages-box">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label
+                        htmlFor="khatmah-pages-input"
+                        className="block text-xs text-stone-600 mb-1"
+                      >
+                        عدد الصفحات المقروءة اليوم
+                      </label>
+                      <input
+                        id="khatmah-pages-input"
+                        type="number"
+                        min={1}
+                        max={604}
+                        value={pagesInput}
+                        onChange={(e) => setPagesInput(e.target.value)}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl font-tabular tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="khatmah-note-input"
+                        className="block text-xs text-stone-600 mb-1"
+                      >
+                        ملاحظة الورد (اختياري)
+                      </label>
+                      <input
+                        id="khatmah-note-input"
+                        type="text"
+                        placeholder="مثال: ورد بعد صلاة الفجر"
+                        value={noteInput}
+                        onChange={(e) => setNoteInput(e.target.value)}
+                        className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const num = parseInt(pagesInput, 10);
+                      if (Number.isFinite(num) && num > 0) {
+                        handleLogReading(num);
+                      }
+                    }}
+                    className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>تسجيل الصفحات في سجل الختمة</span>
+                  </button>
+                </div>
+              )}
+
               {/* Quick Preset Buttons */}
-              <div>
+              <div className="pt-2 border-t border-stone-100">
                 <span className="text-xs text-stone-600 block mb-2">
                   إضافة سريعة للورد المقروء اليوم:
                 </span>
@@ -431,87 +767,82 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => handleLogReading(5, 'قراءة ٥ صفحات (حزب تقريباً)')}
-                    className="min-h-[40px] px-2.5 py-2 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-200 text-xs font-semibold text-stone-800 cursor-pointer"
+                    className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-200 text-xs font-semibold text-stone-800 cursor-pointer"
                   >
                     + ٥ صفحات
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLogReading(10, 'قراءة نصف جزء (١٠ صفحات)')}
-                    className="min-h-[40px] px-2.5 py-2 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-200 text-xs font-semibold text-stone-800 cursor-pointer"
+                    className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-[#F7F4EE] hover:bg-stone-200/80 border border-stone-200 text-xs font-semibold text-stone-800 cursor-pointer"
                   >
                     + نصف جزء (١٠ ص)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLogReading(20, 'قراءة جزء كامل (٢٠ صفحة)')}
-                    className="min-h-[40px] px-2.5 py-2 rounded-xl bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/30 text-xs font-bold text-[#14532D] cursor-pointer"
+                    className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/30 text-xs font-bold text-[#14532D] cursor-pointer"
                   >
                     + جزء كامل (٢٠ ص)
                   </button>
                 </div>
               </div>
-
-              {/* Custom Pages Input */}
-              <div className="pt-2 border-t border-stone-100 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label
-                      htmlFor="khatmah-pages-input"
-                      className="block text-xs text-stone-600 mb-1"
-                    >
-                      عدد الصفحات المقروءة
-                    </label>
-                    <input
-                      id="khatmah-pages-input"
-                      type="number"
-                      min={1}
-                      max={604}
-                      value={pagesInput}
-                      onChange={(e) => setPagesInput(e.target.value)}
-                      className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl font-tabular tabular-nums"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="khatmah-note-input"
-                      className="block text-xs text-stone-600 mb-1"
-                    >
-                      ملاحظة الورد (اختياري)
-                    </label>
-                    <input
-                      id="khatmah-note-input"
-                      type="text"
-                      placeholder="مثال: ورد بعد صلاة الفجر"
-                      value={noteInput}
-                      onChange={(e) => setNoteInput(e.target.value)}
-                      className="w-full min-h-[40px] px-3 py-1.5 text-xs bg-[#FBF9F5] border border-stone-300 rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const num = parseInt(pagesInput, 10);
-                    if (Number.isFinite(num) && num > 0) {
-                      handleLogReading(num);
-                    }
-                  }}
-                  className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-[#14532D] text-white text-xs font-semibold hover:bg-[#14532D]/90 flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>تسجيل الصفحات في سجل الختمة</span>
-                </button>
-              </div>
             </div>
 
-            {/* Right 6 Cols: Goal Setting & History Log */}
+            {/* Right 6 Cols: Target Date Picker & History Log */}
             <div className="lg:col-span-6 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4">
               <div className="border-b border-stone-100 pb-3">
                 <h4 className="font-display text-base font-bold text-stone-900">
-                  تحديد هدف فترة الختم
+                  تحديد التاريخ المستهدف لختم القرآن
                 </h4>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  اختر تاريخاً محدداً للختم أو اختر مدة بالأيام ليحسب التطبيق وردك اليومي تلقائياً
+                </p>
+              </div>
+
+              {/* Explicit Target Date Picker */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="khatmah-target-date-input"
+                    className="block text-xs font-semibold text-stone-700 mb-1"
+                  >
+                    التاريخ المستهدف لإتمام الختمة:
+                  </label>
+                  <input
+                    id="khatmah-target-date-input"
+                    data-testid="khatmah-target-date-input"
+                    type="date"
+                    min={new Date().toISOString().slice(0, 10)}
+                    value={stats.targetDateISO}
+                    onChange={(e) => handleSetTargetDateISO(e.target.value)}
+                    className="w-full min-h-[38px] px-3 py-1.5 text-xs font-bold bg-[#FBF9F5] border border-stone-300 rounded-xl text-stone-900 font-tabular tabular-nums"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="custom-target-days"
+                    className="block text-xs font-semibold text-stone-700 mb-1"
+                  >
+                    أو المدة المستهدفة (بالأيام):
+                  </label>
+                  <input
+                    id="custom-target-days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={customTargetDays}
+                    onChange={(e) => {
+                      setCustomTargetDays(e.target.value);
+                      const parsed = parseInt(e.target.value, 10);
+                      if (Number.isFinite(parsed) && parsed >= 1) {
+                        handleSetTargetDays(parsed);
+                      }
+                    }}
+                    className="w-full min-h-[38px] px-3 py-1.5 text-xs font-bold bg-[#FBF9F5] border border-stone-300 rounded-xl font-tabular tabular-nums"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-4 gap-2">
@@ -525,7 +856,7 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                     key={preset.days}
                     type="button"
                     onClick={() => handleSetTargetDays(preset.days)}
-                    className={`min-h-[38px] px-2 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                    className={`min-h-[36px] px-2 py-1 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
                       plan.targetDays === preset.days
                         ? 'bg-[#14532D] text-white border-[#14532D]'
                         : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:bg-stone-100'
@@ -536,30 +867,6 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="custom-target-days"
-                  className="text-xs text-stone-600 shrink-0"
-                >
-                  أو حدد مدة مخصصة (بالأيام):
-                </label>
-                <input
-                  id="custom-target-days"
-                  type="number"
-                  min={3}
-                  max={365}
-                  value={customTargetDays}
-                  onChange={(e) => {
-                    setCustomTargetDays(e.target.value);
-                    const parsed = parseInt(e.target.value, 10);
-                    if (Number.isFinite(parsed) && parsed >= 3) {
-                      handleSetTargetDays(parsed);
-                    }
-                  }}
-                  className="w-24 min-h-[36px] px-2.5 py-1 text-xs bg-[#FBF9F5] border border-stone-300 rounded-lg font-tabular tabular-nums"
-                />
-              </div>
-
               {/* Recent Reading Logs */}
               <div className="pt-2 border-t border-stone-100 space-y-2">
                 <span className="text-xs font-bold text-stone-800 block">
@@ -567,7 +874,7 @@ export const KhatmahTrackerPanel: React.FC<KhatmahTrackerPanelProps> = ({
                 </span>
                 {plan.logs.length === 0 ? (
                   <p className="text-xs text-stone-500 py-2">
-                    لم يتم تسجيل قراءات في هذه الختمة بعد. ابدأ بتسجيل وردك اليومي أعلاه.
+                    لم يتم تسجيل قراءات في هذه الختمة بعد. ابدأ بتسجيل الصفحة أو الجزء أعلاه.
                   </p>
                 ) : (
                   <div className="divide-y divide-stone-100 max-h-40 overflow-y-auto pr-1">

@@ -360,6 +360,12 @@ export const QuranView: React.FC<QuranViewProps> = ({
   // Keyboard Left / Right Arrow navigation for Fullscreen Mushaf
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
+      ) {
+        return;
+      }
       if (activeOverlay !== 'none') {
         if (e.key === 'Escape') {
           setActiveOverlay('none');
@@ -369,11 +375,12 @@ export const QuranView: React.FC<QuranViewProps> = ({
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleSelectPage(
-          selectedPageNum === 1 ? 2 : Math.max(1, selectedPageNum - 1)
+          selectedPageNum === 1 ? 2 : Math.max(1, selectedPageNum - 1),
+          true
         );
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        handleSelectPage(Math.min(604, selectedPageNum + 1));
+        handleSelectPage(Math.min(604, selectedPageNum + 1), true);
       } else if (e.key === 'Escape' && showHud) {
         setShowHud(false);
       }
@@ -1043,28 +1050,6 @@ export const QuranView: React.FC<QuranViewProps> = ({
     }
   };
 
-  // Support Left / Right keyboard arrows for instant page turning
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (activeOverlay !== 'none') return;
-      if (
-        document.activeElement &&
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
-      ) {
-        return;
-      }
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleSelectPage(Math.min(604, selectedPageNum + 1), true);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleSelectPage(Math.max(1, selectedPageNum - 1), true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeOverlay, selectedPageNum]);
-
   const baseTypographySpec = useMemo(
     () => getMushafTypographySpec(fontSizeLevel, false),
     [fontSizeLevel]
@@ -1233,6 +1218,15 @@ export const QuranView: React.FC<QuranViewProps> = ({
               className="min-h-[34px] px-2.5 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25 text-white rounded-lg cursor-pointer shrink-0 whitespace-nowrap"
             >
               التفسير
+            </button>
+
+            <button
+              type="button"
+              data-testid="hud-open-themes-btn"
+              onClick={() => setActiveOverlay('themes')}
+              className="min-h-[34px] px-2.5 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25 text-white rounded-lg cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              الموضوعات
             </button>
 
             <button
@@ -1417,6 +1411,18 @@ export const QuranView: React.FC<QuranViewProps> = ({
                 </span>
               </button>
             )}
+            <button
+              type="button"
+              data-testid="mushaf-top-khatmah-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveOverlay('khatmah');
+              }}
+              title="فتح متابعة ختم القرآن (تسجيل بالصفحة أو الجزء وتحديد التاريخ المستهدف)"
+              className="px-2 py-0.5 rounded-lg bg-[#14532D] hover:bg-[#14532D]/90 text-white text-[10px] sm:text-[11px] font-bold cursor-pointer whitespace-nowrap"
+            >
+              تتبع الختمة
+            </button>
             <span data-testid="mushaf-header-page" className="whitespace-nowrap">
               ص {toArabicNumerals(pageHeaderInfo.pageNum)}
             </span>

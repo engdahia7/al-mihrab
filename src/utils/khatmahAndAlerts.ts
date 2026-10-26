@@ -17,6 +17,7 @@ export interface KhatmahPlanState {
   targetDays: number;
   currentPage: number; // 0 to 604
   startDateISO: string;
+  targetDateISO?: string; // Optional explicit target completion date (YYYY-MM-DD)
   completedKhatmahsCount: number;
   logs: KhatmahLogEntry[];
 }
@@ -34,6 +35,8 @@ export interface KhatmahStatistics {
   pagesPerPrayer: number;
   daysRemainingAtPace: number;
   estimatedDaysLeft: number;
+  targetDateISO: string;
+  daysUntilTargetDate: number;
   isCompleted: boolean;
   totalLoggedPagesThisWeek: number;
   statusMessageAr: string;
@@ -50,9 +53,65 @@ export function getJuzForPage(page: number): number {
 }
 
 /**
+ * Returns the first page (1..604) of a given Juz (1..30) in the 604-page Madinah Mushaf
+ */
+export function getFirstPageOfJuz(juzNumber: number): number {
+  const safeJuz = Math.max(1, Math.min(30, Math.round(juzNumber)));
+  if (safeJuz === 1) return 1;
+  return (safeJuz - 1) * 20 + 2;
+}
+
+/**
+ * Returns the last page (1..604) of a given Juz (1..30) in the 604-page Madinah Mushaf
+ */
+export function getLastPageOfJuz(juzNumber: number): number {
+  const safeJuz = Math.max(1, Math.min(30, Math.round(juzNumber)));
+  if (safeJuz === 1) return 21;
+  if (safeJuz === 30) return TOTAL_MUSHAF_PAGES;
+  return safeJuz * 20 + 1;
+}
+
+/**
+ * Computes YYYY-MM-DD target date N days from a reference YYYY-MM-DD date
+ */
+export function computeTargetDateISOFromDays(
+  days: number,
+  fromDateISO?: string
+): string {
+  const safeDays = Math.max(1, Math.min(365, Math.round(days || 30)));
+  const baseDate = fromDateISO
+    ? new Date(`${fromDateISO.slice(0, 10)}T00:00:00Z`)
+    : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    const fallback = new Date(Date.now() + safeDays * 86400000);
+    return fallback.toISOString().slice(0, 10);
+  }
+  const target = new Date(baseDate.getTime() + safeDays * 86400000);
+  return target.toISOString().slice(0, 10);
+}
+
+/**
+ * Computes remaining days until targetDateISO from a reference date (minimum 1 day)
+ */
+export function computeDaysUntilTargetDate(
+  targetDateISO: string,
+  fromDateISO?: string
+): number {
+  const todayStr = (fromDateISO || new Date().toISOString()).slice(0, 10);
+  const startMs = Date.parse(`${todayStr}T00:00:00Z`);
+  const endMs = Date.parse(`${targetDateISO.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 30;
+  const diffDays = Math.ceil((endMs - startMs) / 86400000);
+  return Math.max(1, Math.min(365, diffDays));
+}
+
+/**
  * Computes comprehensive Khatmah progress and daily Wird statistics
  */
-export function calculateKhatmahStats(plan: KhatmahPlanState): KhatmahStatistics {
+export function calculateKhatmahStats(
+  plan: KhatmahPlanState,
+  referenceDateISO?: string
+): KhatmahStatistics {
   const safeTargetDays = Math.max(1, Math.min(365, Math.round(plan.targetDays || 30)));
   const currentPage = Math.max(0, Math.min(TOTAL_MUSHAF_PAGES, Math.round(plan.currentPage || 0)));
   const remainingPages = Math.max(0, TOTAL_MUSHAF_PAGES - currentPage);
@@ -63,13 +122,35 @@ export function calculateKhatmahStats(plan: KhatmahPlanState): KhatmahStatistics
 
   const currentJuz = getJuzForPage(Math.max(1, currentPage));
   const completedJuzCount =
-    currentPage >= TOTAL_MUSHAF_PAGES ? 30 : Math.max(0, Math.floor(currentPage / 20));
+    currentPage >= TOTAL_MUSHAF_PAGES
+      ? 30
+      : currentPage >= 21
+      ? Math.min(29, Math.floor((currentPage - 1) / 20))
+      : 0;
 
-  const dailyTargetPages = Math.ceil(TOTAL_MUSHAF_PAGES / safeTargetDays);
+  const resolvedTargetDateISO =
+    plan.targetDateISO && /^\d{4}-\d{2}-\d{2}$/.test(plan.targetDateISO)
+      ? plan.targetDateISO
+      : computeTargetDateISOFromDays(safeTargetDays, referenceDateISO || plan.startDateISO);
+
+  const daysUntilTargetDate = plan.targetDateISO
+    ? computeDaysUntilTargetDate(plan.targetDateISO, referenceDateISO)
+    : safeTargetDays;
+
+  const dailyTargetPages = plan.targetDateISO
+    ? remainingPages > 0
+      ? Math.ceil(remainingPages / Math.max(1, daysUntilTargetDate))
+      : Math.ceil(TOTAL_MUSHAF_PAGES / Math.max(1, daysUntilTargetDate))
+    : Math.ceil(TOTAL_MUSHAF_PAGES / safeTargetDays);
+
   const pagesPerPrayer = Math.max(1, Math.ceil(dailyTargetPages / 5));
 
   const daysRemainingAtPace =
-    remainingPages === 0 ? 0 : Math.ceil(remainingPages / Math.max(1, dailyTargetPages));
+    remainingPages === 0
+      ? 0
+      : plan.targetDateISO
+      ? daysUntilTargetDate
+      : Math.ceil(remainingPages / Math.max(1, dailyTargetPages));
 
   const isCompleted = currentPage >= TOTAL_MUSHAF_PAGES;
 
@@ -102,6 +183,8 @@ export function calculateKhatmahStats(plan: KhatmahPlanState): KhatmahStatistics
     pagesPerPrayer,
     daysRemainingAtPace,
     estimatedDaysLeft: daysRemainingAtPace,
+    targetDateISO: resolvedTargetDateISO,
+    daysUntilTargetDate,
     isCompleted,
     totalLoggedPagesThisWeek,
     statusMessageAr,
@@ -116,6 +199,7 @@ export type AlertSoundId =
   | 'takbeer'
   | 'mosque_chime'
   | 'fajr_serenity'
+  | 'tasbih_bell'
   | 'iqamah_pulse'
   | 'silent';
 
@@ -396,3 +480,274 @@ export function checkActivePrayerAlert(
   }
   return null;
 }
+
+// ============================================================================
+// CUSTOMIZABLE ADHKAR REMINDER SYSTEM (نظام تذكير المستخدمين بالأذكار المخصص)
+// ============================================================================
+
+export type AdhkarReminderSoundId =
+  | 'mosque_chime'
+  | 'fajr_serenity'
+  | 'tasbih_bell'
+  | 'takbeer'
+  | 'custom_file'
+  | 'silent';
+
+export const ADHKAR_REMINDER_SOUND_OPTIONS: AlertSoundSpec[] = [
+  {
+    id: 'mosque_chime',
+    nameAr: 'رنين المحراب الهادئ',
+    descriptionAr: 'نغمة روحانية دافئة ومريحة لتنبيهات الأذكار والورد اليومي',
+    category: 'acoustic_tone',
+    frequenciesHz: [523.25, 659.25, 783.99, 1046.5],
+    durationMs: 1400,
+  },
+  {
+    id: 'fajr_serenity',
+    nameAr: 'نغمة السكينة والخشوع',
+    descriptionAr: 'ترددات صوتية هادئة تبعث على الطمأنينة وتذكّر بالله',
+    category: 'acoustic_tone',
+    frequenciesHz: [392.0, 493.88, 587.33, 783.99],
+    durationMs: 1600,
+  },
+  {
+    id: 'tasbih_bell',
+    nameAr: 'جرس التسبيح اللطيف',
+    descriptionAr: 'تنبيه قصير وخفيف مناسب للتذكير الدوري المتكرر بالاستغفار والتسبيح',
+    category: 'acoustic_tone',
+    frequenciesHz: [659.25, 880.0, 1046.5],
+    durationMs: 900,
+  },
+  {
+    id: 'takbeer',
+    nameAr: 'نغمة التكبير الإيمانية',
+    descriptionAr: 'نغمة وقورة مستوحاة من مقامات التذكير الشرعي',
+    category: 'acoustic_tone',
+    frequenciesHz: [293.66, 369.99, 440.0, 587.33],
+    durationMs: 1800,
+  },
+  {
+    id: 'custom_file',
+    nameAr: 'صوت الأذان الشرعي المعتمد',
+    descriptionAr: 'تشغيل صوت الأذان الشرعي الأساسي المثبّت في التطبيق',
+    category: 'custom_audio',
+    audioUrl: PRIMARY_PINNED_ADHAN_URL,
+    frequenciesHz: [293.66, 440.0, 392.0, 369.99, 293.66],
+    durationMs: PRIMARY_PINNED_ADHAN_DURATION_SEC * 1000,
+  },
+  {
+    id: 'silent',
+    nameAr: 'تنبيه بصري صامت',
+    descriptionAr: 'إشعار مرئي على الشاشة دون إصدار صوت',
+    category: 'silent',
+    frequenciesHz: [],
+    durationMs: 0,
+  },
+];
+
+export interface SelectableReminderDhikrOption {
+  id: string;
+  titleAr: string;
+  dhikrTextAr: string;
+  virtueBriefAr: string;
+  categoryId: string;
+}
+
+export const REMINDER_SELECTABLE_ADHKAR: SelectableReminderDhikrOption[] = [
+  {
+    id: 'rem-subhanallah',
+    titleAr: 'التسبيح والتحميد',
+    dhikrTextAr: '«سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ»',
+    virtueBriefAr: 'كلمتان خفيفتان على اللسان ثقيلتان في الميزان حبيبتان إلى الرحمن',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-istighfar',
+    titleAr: 'الاستغفار والتوبة',
+    dhikrTextAr:
+      '«أَسْتَغْفِرُ اللَّهَ الْعَظِيمَ الَّذِي لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ وَأَتُوبُ إِلَيْهِ»',
+    virtueBriefAr: 'من قالها غُفر له وإن كان فرّ من الزحف',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-salawat',
+    titleAr: 'الصلاة على النبي ﷺ',
+    dhikrTextAr: '«اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ»',
+    virtueBriefAr: 'من صلّى عليّ صلاةً واحدة صلّى الله عليه بها عشراً',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-hawqalah',
+    titleAr: 'الحوقلة (لا حول ولا قوة إلا بالله)',
+    dhikrTextAr: '«لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ»',
+    virtueBriefAr: 'كنزٌ من كنوز الجنة وبابٌ من أبواب الفرج والإعانة',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-tahlil',
+    titleAr: 'التهليل والتوحيد الجامع',
+    dhikrTextAr:
+      '«لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ»',
+    virtueBriefAr: 'أفضل ما قاله النبي ﷺ والنبيون من قبله وحرزٌ من الشيطان',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-morning-wird',
+    titleAr: 'وِرد أذكار الصباح',
+    dhikrTextAr:
+      '«أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ»',
+    virtueBriefAr: 'حفظٌ وبركةٌ وانشراح صدر في مستهل اليوم',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-evening-wird',
+    titleAr: 'وِرد أذكار المساء',
+    dhikrTextAr:
+      '«أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ»',
+    virtueBriefAr: 'تحصينٌ وسكينةٌ في ختام النهار وإقبال الليل',
+    categoryId: 'evening',
+  },
+  {
+    id: 'rem-yunus',
+    titleAr: 'دعاء ذي النون لتفريج الكرب',
+    dhikrTextAr: '«لَا إِلَهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنْتُ مِنَ الظَّالِمِينَ»',
+    virtueBriefAr: 'لم يدعُ بها رجلٌ مسلم في شيء قط إلا استجاب الله له',
+    categoryId: 'evening',
+  },
+  {
+    id: 'rem-hasbi',
+    titleAr: 'ذكر الكفاية والتوكل',
+    dhikrTextAr:
+      '«حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ»',
+    virtueBriefAr: 'من قالها كفاه الله ما أهمّه من أمر الدنيا والآخرة',
+    categoryId: 'morning',
+  },
+  {
+    id: 'rem-sleep-wird',
+    titleAr: 'وِرد أذكار النوم والسكينة',
+    dhikrTextAr: '«بِاسْمِكَ رَبِّي وَضَعْتُ جَنْبِي وَبِكَ أَرْفَعُهُ، إِنْ أَمْسَكْتَ نَفْسِي فَارْحَمْهَا»',
+    virtueBriefAr: 'حفظُ الملائكة للعبد حتى يصبح وختم اليوم بذكر الله',
+    categoryId: 'sleep',
+  },
+];
+
+export type AdhkarReminderScheduleMode = 'specific_times' | 'interval';
+
+export interface AdhkarReminderScheduleConfig {
+  enabled: boolean;
+  selectedDhikrIds: string[];
+  scheduleMode: AdhkarReminderScheduleMode;
+  specificTimesHHMM: string[]; // e.g. ['06:30', '13:30', '17:30', '21:30']
+  intervalMinutes: number; // e.g. 15, 30, 60, 120, 240
+  soundId: AdhkarReminderSoundId;
+}
+
+export const ADHKAR_REMINDERS_STORAGE_KEY = 'almihrab_custom_adhkar_reminders_v1';
+
+export function getDefaultAdhkarRemindersConfig(): AdhkarReminderScheduleConfig {
+  return {
+    enabled: true,
+    selectedDhikrIds: [
+      'rem-subhanallah',
+      'rem-istighfar',
+      'rem-salawat',
+      'rem-hawqalah',
+      'rem-morning-wird',
+      'rem-evening-wird',
+    ],
+    scheduleMode: 'specific_times',
+    specificTimesHHMM: ['07:00', '13:30', '17:30', '21:30'],
+    intervalMinutes: 60,
+    soundId: 'mosque_chime',
+  };
+}
+
+export function loadAdhkarRemindersConfig(): AdhkarReminderScheduleConfig {
+  const defaults = getDefaultAdhkarRemindersConfig();
+  if (typeof window === 'undefined') return defaults;
+  try {
+    const raw = localStorage.getItem(ADHKAR_REMINDERS_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : defaults.enabled,
+      selectedDhikrIds:
+        Array.isArray(parsed.selectedDhikrIds) && parsed.selectedDhikrIds.length > 0
+          ? parsed.selectedDhikrIds
+          : defaults.selectedDhikrIds,
+      scheduleMode:
+        parsed.scheduleMode === 'interval' || parsed.scheduleMode === 'specific_times'
+          ? parsed.scheduleMode
+          : defaults.scheduleMode,
+      specificTimesHHMM:
+        Array.isArray(parsed.specificTimesHHMM) && parsed.specificTimesHHMM.length > 0
+          ? parsed.specificTimesHHMM
+          : defaults.specificTimesHHMM,
+      intervalMinutes:
+        typeof parsed.intervalMinutes === 'number' && parsed.intervalMinutes >= 5
+          ? parsed.intervalMinutes
+          : defaults.intervalMinutes,
+      soundId: parsed.soundId || defaults.soundId,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+export function saveAdhkarRemindersConfig(
+  config: AdhkarReminderScheduleConfig
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ADHKAR_REMINDERS_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Evaluates whether an Adhkar reminder should fire at the given HH:MM time,
+ * returning the selected Dhikr item, schedule explanation, and customized soundId.
+ */
+export function evaluateAdhkarReminderForMinute(
+  config: AdhkarReminderScheduleConfig,
+  currentHHMM: string,
+  rotationSeed = 0
+): {
+  dhikr: SelectableReminderDhikrOption;
+  triggerReasonAr: string;
+  soundId: AdhkarReminderSoundId;
+} | null {
+  if (!config.enabled) return null;
+
+  const activeItems = REMINDER_SELECTABLE_ADHKAR.filter((item) =>
+    config.selectedDhikrIds.includes(item.id)
+  );
+  const pool =
+    activeItems.length > 0 ? activeItems : [REMINDER_SELECTABLE_ADHKAR[0]];
+
+  const totalMin = parseTimeHHMMToMinutes(currentHHMM);
+
+  if (config.scheduleMode === 'specific_times') {
+    const matchedIdx = config.specificTimesHHMM.indexOf(currentHHMM);
+    if (matchedIdx === -1) return null;
+    const chosen = pool[(matchedIdx + rotationSeed) % pool.length];
+    return {
+      dhikr: chosen,
+      triggerReasonAr: `تذكير الأذكار المجدول عند الساعة ${currentHHMM}`,
+      soundId: config.soundId,
+    };
+  }
+
+  // Interval mode (every N minutes)
+  const safeInterval = Math.max(5, Math.min(720, Math.round(config.intervalMinutes || 60)));
+  if (totalMin % safeInterval !== 0) return null;
+  const slotIndex = Math.floor(totalMin / safeInterval) + rotationSeed;
+  const chosen = pool[slotIndex % pool.length];
+  return {
+    dhikr: chosen,
+    triggerReasonAr: `تذكير الأذكار الدوري (كل ${safeInterval} دقيقة)`,
+    soundId: config.soundId,
+  };
+}
+

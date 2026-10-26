@@ -14,6 +14,7 @@ import {
   Minus,
   Check,
   Moon,
+  BookOpen,
   Maximize2,
   Minimize2,
 } from 'lucide-react';
@@ -53,15 +54,17 @@ import {
   sunnahItemToDawahCardPayload,
 } from '../utils/worshipTrackerAndTools';
 import { triggerMasbahaTactileFeedback } from '../utils/islamicFeatures';
+import { KhatmahTrackerPanel } from './KhatmahTrackerPanel';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 
-export type WorshipHubSubSection = 'tracker' | 'sunnah' | 'qada' | 'khushu';
+export type WorshipHubSubSection = 'tracker' | 'khatmah' | 'sunnah' | 'qada' | 'khushu';
 
 interface WorshipAndQadaHubProps {
   hijriDay: number;
   hijriMonthNameAr: string;
   onOpenDawahCard?: (payload: DawahShareCardPayload) => void;
   initialSubSection?: WorshipHubSubSection;
+  navigationSignal?: number;
 }
 
 export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
@@ -69,6 +72,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
   hijriMonthNameAr,
   onOpenDawahCard,
   initialSubSection,
+  navigationSignal,
 }) => {
   const [activeSubSection, setActiveSubSection] =
     useState<WorshipHubSubSection>(initialSubSection || 'tracker');
@@ -77,7 +81,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
     if (initialSubSection) {
       setActiveSubSection(initialSubSection);
     }
-  }, [initialSubSection]);
+  }, [initialSubSection, navigationSignal]);
 
   // =========================================================================
   // 1. DAILY WORSHIP, 12 RAWATIB & FASTING STATE
@@ -567,8 +571,8 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
 
         <div
           role="tablist"
-          aria-label="أدوات المحاسبة والسنن والقضاء والخلوة"
-          className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl"
+          aria-label="أدوات المحاسبة والختمة والسنن والقضاء والخلوة"
+          className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-[#F7F4EE] border border-stone-200 rounded-xl"
         >
           <button
             type="button"
@@ -589,6 +593,22 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
           <button
             type="button"
             role="tab"
+            data-testid="hub-tab-khatmah"
+            aria-selected={activeSubSection === 'khatmah'}
+            onClick={() => setActiveSubSection('khatmah')}
+            className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+              activeSubSection === 'khatmah'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-stone-700 hover:bg-stone-200/70'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span>تتبع ختم القرآن</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
             data-testid="hub-tab-sunnah"
             aria-selected={activeSubSection === 'sunnah'}
             onClick={() => setActiveSubSection('sunnah')}
@@ -599,7 +619,7 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
             }`}
           >
             <Award className="w-3.5 h-3.5 shrink-0" />
-            <span>السنن المهجورة والآداب</span>
+            <span>السنن المهجورة</span>
           </button>
 
           <button
@@ -635,6 +655,9 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
           </button>
         </div>
       </div>
+
+      {/* SECTION: QURAN KHATMAH TRACKER */}
+      {activeSubSection === 'khatmah' && <KhatmahTrackerPanel />}
 
       {/* =====================================================================
           SECTION 1: DAILY & WEEKLY WORSHIP, 12 RAWATIB & FASTING TRACKER
@@ -1226,8 +1249,8 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
                       {item.titleAr}
                     </h4>
 
-                    {/* Authentic Hadith & Grading */}
-                    <div className="bg-white border border-stone-200/90 rounded-xl p-3.5 space-y-2">
+                    {/* Authentic Hadith & Grading (Clean Hairline Separation — No Nested Box-in-Box) */}
+                    <div className="border-t border-stone-200/80 pt-3 space-y-1.5">
                       <p className="font-quran text-base sm:text-lg text-stone-900 leading-relaxed">
                         {item.hadithArabicText}
                       </p>
@@ -1236,23 +1259,23 @@ export const WorshipAndQadaHub: React.FC<WorshipAndQadaHubProps> = ({
                       </p>
                     </div>
 
-                    {/* Practical Application */}
-                    <div className="space-y-2 text-xs">
-                      <div className="bg-white/80 border border-stone-200/80 rounded-lg p-3 space-y-1">
-                        <span className="font-bold text-[#14532D] block">
-                          كيفية تطبيقها عملياً في اليوم:
+                    {/* Practical Application & Spiritual Reward */}
+                    <div className="border-t border-stone-200/70 pt-2.5 space-y-2 text-xs">
+                      <div>
+                        <span className="font-bold text-[#14532D]">
+                          كيفية تطبيقها عملياً:{' '}
                         </span>
-                        <p className="text-stone-700 leading-relaxed">
+                        <span className="text-stone-700 leading-relaxed">
                           {item.practicalHowToAr}
-                        </p>
-                      </div>
-                      <div className="bg-white/80 border border-stone-200/80 rounded-lg p-3 space-y-1">
-                        <span className="font-bold text-[#78350F] block">
-                          ثمرة إحيائها وأجرها:
                         </span>
-                        <p className="text-stone-700 leading-relaxed">
+                      </div>
+                      <div>
+                        <span className="font-bold text-[#78350F]">
+                          ثمرة إحيائها:{' '}
+                        </span>
+                        <span className="text-stone-700 leading-relaxed">
                           {item.spiritualRewardAr}
-                        </p>
+                        </span>
                       </div>
                     </div>
                   </div>

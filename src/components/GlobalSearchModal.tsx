@@ -15,11 +15,19 @@ import { VERIFIED_ADHKAR, ADHKAR_CATEGORIES } from '../data/adhkarData';
 import { AUTHENTIC_DUAS_LIST } from '../data/duasData';
 import { ASMA_ALLAH_AL_HUSNA_LIST } from '../data/thematicAndNamesData';
 import {
+  AUTHENTIC_HADITHS_LIST,
+  searchAuthenticHadiths,
+} from '../data/hadithsData';
+import {
   normalizeArabicForQuranSearch,
   searchQuranVersesLocal,
 } from '../utils/quranStudyTools';
 import type { DawahShareCardPayload } from '../utils/dawahShareCards';
 import type { ActiveTab } from '../App';
+import type { DuasSectionId } from './DuasView';
+import type { PrayersSubScreen } from './PrayerTimesView';
+import type { WorshipHubSubSection } from './WorshipAndQadaHub';
+import type { QiblaSubTab } from './QiblaAndSourcesView';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -28,9 +36,22 @@ interface GlobalSearchModalProps {
   onOpenMushafPage: (pageNumber: number) => void;
   onOpenDawahCard: (payload: DawahShareCardPayload) => void;
   onOpenWaqfModal: () => void;
+  onNavigateDuasSection?: (section: DuasSectionId) => void;
+  onNavigatePrayersSubScreen?: (
+    subScreen: PrayersSubScreen,
+    worshipSubSection?: WorshipHubSubSection
+  ) => void;
+  onNavigateQiblaSubTab?: (subTab: QiblaSubTab) => void;
 }
 
-type SearchFilterCategory = 'all' | 'quran' | 'adhkar' | 'duas' | 'asma' | 'tools';
+type SearchFilterCategory =
+  | 'all'
+  | 'quran'
+  | 'hadiths'
+  | 'adhkar'
+  | 'duas'
+  | 'asma'
+  | 'tools';
 
 interface QuickToolShortcut {
   id: string;
@@ -47,6 +68,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onOpenMushafPage,
   onOpenDawahCard,
   onOpenWaqfModal,
+  onNavigateDuasSection,
+  onNavigatePrayersSubScreen,
+  onNavigateQiblaSubTab,
 }) => {
   const [query, setQuery] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<SearchFilterCategory>('all');
@@ -75,12 +99,30 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const quickTools: QuickToolShortcut[] = useMemo(
     () => [
       {
+        id: 'tool-prophetic-hadiths',
+        titleAr: 'موسوعة الأحاديث النبوية الصحيحة (مرتبة حسب الموضوع مع التخريج والرواة)',
+        subtitleAr: 'أحاديث الصحيحين والسنن في الصبر والشكر والدعاء والإيمان والأخلاق مع البحث',
+        keywords: 'حديث احاديث نبوية صحيحة البخاري مسلم الصبر الشكر الدعاء الراوي التخريج متفق عليه',
+        action: () => {
+          if (onNavigateDuasSection) {
+            onNavigateDuasSection('hadiths');
+          } else {
+            onNavigateTab('duas');
+          }
+          onClose();
+        },
+      },
+      {
         id: 'tool-prophets-stories',
         titleAr: 'موسوعة قصص الأنبياء في القرآن وأدعيتهم (٢٥ نبياً ورسولاً)',
         subtitleAr: 'شجرة الأنبياء التفاعلية ومعجزاتهم وأدعيتهم القرآنية المستجابة مع الاستماع الصوتي',
         keywords: 'قصص الانبياء المرسلين ادم نوح ابراهيم موسى عيسى محمد يونس ايوب يوسف سليمان داود دعاء',
         action: () => {
-          onNavigateTab('duas');
+          if (onNavigateDuasSection) {
+            onNavigateDuasSection('prophets_stories');
+          } else {
+            onNavigateTab('duas');
+          }
           onClose();
         },
       },
@@ -90,7 +132,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'مُركِّب دعاء الاستخارة التفاعلي باسم حاجتك مع الخطوات العملية وسجل الاستخارات',
         keywords: 'استخارة الاستخارة صلاة التوبة الحاجة الضحى التسبيح دعاء قرار',
         action: () => {
-          onNavigateTab('duas');
+          if (onNavigateDuasSection) {
+            onNavigateDuasSection('istikhara_guide');
+          } else {
+            onNavigateTab('duas');
+          }
           onClose();
         },
       },
@@ -100,7 +146,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'بطاقة سنة اليوم وسنن الفطرة والطعام واللباس والمنزل والجمعة مع متابعة التطبيق',
         keywords: 'السنن المهجورة سنة اليوم الاداب النبوية الفطرة الطعام الشراب اللباس الجمعة',
         action: () => {
-          onNavigateTab('prayers');
+          if (onNavigatePrayersSubScreen) {
+            onNavigatePrayersSubScreen('worship_qada', 'sunnah');
+          } else {
+            onNavigateTab('prayers');
+          }
           onClose();
         },
       },
@@ -110,7 +160,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'حساب فلكي دقيق لوقت التهجّد والتنزّل الإلهي ومنتصف الليل الشرعي والضحى',
         keywords: 'الثلث الاخير الليل التهجد قيام الضحى الشروق النهي منتصف',
         action: () => {
-          onNavigateTab('prayers');
+          if (onNavigatePrayersSubScreen) {
+            onNavigatePrayersSubScreen('worship_qada', 'tracker');
+          } else {
+            onNavigateTab('prayers');
+          }
           onClose();
         },
       },
@@ -120,7 +174,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'حساب نصاب الذهب (٨٥جم) والفضة (٥٩٥جم) وربع العشر ٢.٥٪ وزكاة الفطر',
         keywords: 'زكاة الزكاة نصاب ذهب فضة مال تجارة فطر صاع',
         action: () => {
-          onNavigateTab('qibla');
+          if (onNavigateQiblaSubTab) {
+            onNavigateQiblaSubTab('hijri_sources');
+          } else {
+            onNavigateTab('qibla');
+          }
           onClose();
         },
       },
@@ -130,7 +188,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'توزيع الأنصبة الشرعية للورثة مع الأدلة القرآنية من سورة النساء',
         keywords: 'مواريث ميراث تركة فرائض عول حجب نصيب',
         action: () => {
-          onNavigateTab('qibla');
+          if (onNavigateQiblaSubTab) {
+            onNavigateQiblaSubTab('inheritance');
+          } else {
+            onNavigateTab('qibla');
+          }
           onClose();
         },
       },
@@ -140,7 +202,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         subtitleAr: 'البحث عن أقرب المساجد والجوامع وفتح الملاحة عبر خرائط جوجل وWaze',
         keywords: 'مسجد مساجد خريطة ملاحة قريب جامع قبلة',
         action: () => {
-          onNavigateTab('qibla');
+          if (onNavigateQiblaSubTab) {
+            onNavigateQiblaSubTab('qibla_mosques');
+          } else {
+            onNavigateTab('qibla');
+          }
           onClose();
         },
       },
@@ -155,7 +221,14 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         },
       },
     ],
-    [onNavigateTab, onClose, onOpenWaqfModal]
+    [
+      onNavigateTab,
+      onClose,
+      onOpenWaqfModal,
+      onNavigateDuasSection,
+      onNavigatePrayersSubScreen,
+      onNavigateQiblaSubTab,
+    ]
   );
 
   const normalizedQuery = useMemo(
@@ -214,7 +287,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     }).slice(0, 6);
   }, [normalizedQuery]);
 
-  // 6. Matching Tools
+  // 6. Matching Authentic Prophetic Hadiths
+  const matchingHadiths = useMemo(() => {
+    if (!normalizedQuery) return AUTHENTIC_HADITHS_LIST.slice(0, 4);
+    return searchAuthenticHadiths(query, 'all').slice(0, 6);
+  }, [normalizedQuery, query]);
+
+  // 7. Matching Tools
   const matchingTools = useMemo(() => {
     if (!normalizedQuery) return quickTools;
     return quickTools.filter((t) => {
@@ -228,6 +307,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   if (!isOpen) return null;
 
   const showQuran = activeFilter === 'all' || activeFilter === 'quran';
+  const showHadiths = activeFilter === 'all' || activeFilter === 'hadiths';
   const showAdhkar = activeFilter === 'all' || activeFilter === 'adhkar';
   const showDuas = activeFilter === 'all' || activeFilter === 'duas';
   const showAsma = activeFilter === 'all' || activeFilter === 'asma';
@@ -250,7 +330,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-[#14532D]" />
               <h2 className="font-display text-sm sm:text-base font-bold text-stone-900">
-                الباحث الشامل في المحراب (القرآن · الأذكار · الأدعية · الأسماء الحسنى · الأدوات)
+                الباحث الشامل في المحراب (القرآن · الأحاديث · الأذكار · الأدعية · الأسماء الحسنى)
               </h2>
             </div>
             <button
@@ -271,7 +351,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               data-testid="global-search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث عن أي آية، سورة، ذكر، دعاء، اسم من أسماء الله، أو أداة (زكاة، مواريث، الثلث الأخير)..."
+              placeholder="ابحث عن أي آية، حديث نبوي، راوٍ، ذكر، دعاء، اسم من أسماء الله، أو أداة..."
               className="w-full min-h-[42px] pr-10 pl-3 py-2 text-xs sm:text-sm bg-white border border-[#B59E7A] rounded-xl text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#14532D]"
             />
           </div>
@@ -283,6 +363,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 [
                   { id: 'all', label: 'الكل' },
                   { id: 'quran', label: 'المصحف والآيات' },
+                  { id: 'hadiths', label: 'الأحاديث الصحيحة' },
                   { id: 'adhkar', label: 'الأذكار' },
                   { id: 'duas', label: 'الأدعية' },
                   { id: 'asma', label: 'الأسماء الحسنى' },
@@ -306,7 +387,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
             <div className="hidden sm:flex items-center gap-1 text-[11px] text-stone-600">
               <span>بحث سريع:</span>
-              {['آية الكرسي', 'الرزق', 'الكرب', 'الزكاة', 'الكهف'].map((kw) => (
+              {['الصبر', 'الشكر', 'آية الكرسي', 'الرزق', 'الزكاة'].map((kw) => (
                 <button
                   key={kw}
                   type="button"
@@ -347,6 +428,55 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     </div>
                     <ArrowLeft className="w-4 h-4 text-[#14532D] shrink-0" />
                   </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 1.B Authentic Prophetic Hadiths */}
+          {showHadiths && matchingHadiths.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="text-xs font-bold text-[#14532D] flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>الأحاديث النبوية الصحيحة (مع الرواة والتخريج)</span>
+              </h3>
+              <div className="space-y-2">
+                {matchingHadiths.map((h) => (
+                  <div
+                    key={h.id}
+                    className="p-3 rounded-xl bg-white border border-[#D8CBB3] space-y-1.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-stone-900">
+                          {h.titleAr}
+                        </span>
+                        <span className="text-[11px] text-[#78350F] mr-2">
+                          (باب {h.topicLabelAr} · {h.gradingAr})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onNavigateDuasSection) {
+                            onNavigateDuasSection('hadiths');
+                          } else {
+                            onNavigateTab('duas');
+                          }
+                          onClose();
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[#14532D] text-white text-[11px] font-semibold cursor-pointer"
+                      >
+                        قسم الأحاديث
+                      </button>
+                    </div>
+                    <p className="font-quran text-base sm:text-lg text-stone-900 leading-relaxed">
+                      {h.hadithArabicText}
+                    </p>
+                    <p className="text-[11px] text-stone-600">
+                      الراوي: {h.narratorAr} · التخريج: {h.takhrijAr}
+                    </p>
+                  </div>
                 ))}
               </div>
             </section>
