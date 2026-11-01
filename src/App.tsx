@@ -30,6 +30,7 @@ import { AdhkarView } from './components/AdhkarView';
 import { DuasView } from './components/DuasView';
 import { QiblaAndSourcesView } from './components/QiblaAndSourcesView';
 import { SupportAndNotesView } from './components/SupportAndNotesView';
+import { SeasonalMihrabLogo } from './components/SeasonalMihrabLogo';
 import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
@@ -520,34 +521,11 @@ export default function App() {
       {/* Top Bar: 3-Zone Desktop Contract + Compact Mobile App Header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 md:gap-8 px-3.5 sm:px-8 h-14 sm:h-16">
-          {/* Zone 1: Official Al-Mihrab Logo + Brand Wordmark + Combined Slogan */}
-          <a
-            href="#top"
-            onClick={(e) => {
-              e.preventDefault();
-              handleSelectTab('prayers');
-            }}
-            className="flex items-center gap-2.5 shrink-0 group"
-          >
-            <img
-              src="/icon.svg"
-              alt="شعار المحراب"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-xs border border-[#14532D]/20 shrink-0"
-            />
-            <div className="flex flex-col justify-center">
-              <div className="flex items-center gap-2">
-                <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 whitespace-nowrap group-hover:text-[#14532D] transition-colors">
-                  المحراب
-                </span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20 whitespace-nowrap">
-                  في محراب الطاعة · لوجه الله
-                </span>
-              </div>
-              <span className="hidden xl:block text-[11px] text-stone-500 font-medium leading-tight mt-0.5 whitespace-nowrap">
-                نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله
-              </span>
-            </div>
-          </a>
+          {/* Zone 1: Dynamic Seasonal & Occasion-Aware Al-Mihrab Logo + Brand Wordmark */}
+          <SeasonalMihrabLogo
+            todayHijri={todayHijri}
+            onNavigateTab={handleSelectTab}
+          />
 
           {/* Mobile Left Slot: Global Search, Push Bell, Active City & Offline Storage / PWA Install */}
           <div className="flex md:hidden items-center gap-1.5">
