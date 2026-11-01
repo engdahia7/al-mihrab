@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-play-console-aab:
@@ -49,36 +50,25 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Prepare Release Signing Keystore & Digital Asset Links (SHA-256)
+      - name: Restore Original Google Play Upload Keystore (SHA1 21:97:FA:1F...)
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 --decode > android.keystore
-            echo "Restored android.keystore from GitHub Secrets."
-          elif [ -f "android.keystore" ]; then
-            echo "Using repository android.keystore."
-          elif [ -f "releases/android.keystore" ]; then
-            cp releases/android.keystore android.keystore
-            echo "Restored android.keystore from releases/android.keystore."
-          else
-            keytool -genkeypair -v \
-              -keystore android.keystore \
-              -alias almihrab-key \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass "$PASS" \
-              -keypass "$PASS" \
-              -dname "CN=Al-Mihrab, OU=MobileEngineering, O=AlMihrabStudio, L=Makkah, S=Makkah, C=SA"
-            echo "Generated new release android.keystore."
-          fi
+          chmod +x scripts/restore-original-keystore.sh
+          ./scripts/restore-original-keystore.sh
 
-          SHA256=$(keytool -list -v -keystore android.keystore -alias almihrab-key -storepass "$PASS" | grep -i "SHA256:" | sed 's/.*SHA256: //g' | tr -d ' \r\n')
-          echo "Verified Upload Key SHA-256: $SHA256"
-          echo "SIGNING_SHA256=$SHA256" >> "$GITHUB_ENV"
+      - name: Export Digital Asset Links & Upload Certificate PEM
+        run: |
+          echo "Using Upload Key SHA-1:   $SIGNING_SHA1"
+          echo "Using Upload Key SHA-256: $SIGNING_SHA256"
+
+          keytool -export -rfc \
+            -keystore "$GITHUB_WORKSPACE/android.keystore" \
+            -alias almihrab-key \
+            -storepass "$RESOLVED_KEYSTORE_PASS" \
+            -file "$GITHUB_WORKSPACE/upload_certificate.pem" || true
 
           mkdir -p public/.well-known
           cat > public/.well-known/assetlinks.json <<EOF
@@ -92,7 +82,7 @@ jobs:
                 "namespace": "android_app",
                 "package_name": "app.almihrab.twa",
                 "sha256_cert_fingerprints": [
-                  "$SHA256"
+                  "$SIGNING_SHA256"
                 ]
               }
             }
@@ -106,11 +96,9 @@ jobs:
 
       - name: Generate & Patch Android Project for Google Play Console (API 36)
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           APP_VERSION_NAME: ${{ github.event.inputs.app_version_name }}
           APP_VERSION_CODE: ${{ github.event.inputs.app_version_code }}
         run: |
-          PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
           V_CODE="${APP_VERSION_CODE:-$((200 + GITHUB_RUN_NUMBER))}"
           V_NAME="${APP_VERSION_NAME:-2.6.${GITHUB_RUN_NUMBER}}"
           echo "RESOLVED_VERSION_CODE=$V_CODE" >> "$GITHUB_ENV"
@@ -124,22 +112,19 @@ jobs:
           APP_VERSION_CODE="$V_CODE" \
           APP_VERSION_NAME="$V_NAME" \
           KEYSTORE_FILE="$GITHUB_WORKSPACE/android.keystore" \
-          KEYSTORE_PASSWORD="$PASS" \
+          KEYSTORE_PASSWORD="$RESOLVED_KEYSTORE_PASS" \
           KEY_ALIAS="almihrab-key" \
           node scripts/configure-play-console-android.mjs
 
       - name: Build Signed Google Play App Bundle (.aab), APK & R8 Mapping
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
           cd android
           chmod +x gradlew
           ./gradlew bundleRelease assembleRelease \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android.keystore" \
-            -Pandroid.injected.signing.store.password="$PASS" \
+            -Pandroid.injected.signing.store.password="$RESOLVED_KEYSTORE_PASS" \
             -Pandroid.injected.signing.key.alias="almihrab-key" \
-            -Pandroid.injected.signing.key.password="$PASS"
+            -Pandroid.injected.signing.key.password="$RESOLVED_KEYSTORE_PASS"
 
           cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/al-mihrab-release.aab"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/al-mihrab-release.apk"
@@ -151,9 +136,6 @@ jobs:
           fi
 
           cd "$GITHUB_WORKSPACE"
-          if [ ! -f signing-key-info.txt ] && [ -f releases/signing-key-info.txt ]; then
-            cp releases/signing-key-info.txt signing-key-info.txt
-          fi
           if [ -f releases/al-mihrab-play-store-graphics.zip ]; then
             cp releases/al-mihrab-play-store-graphics.zip al-mihrab-play-store-graphics.zip
           fi
@@ -161,6 +143,14 @@ jobs:
       - name: Verify AAB Digital Signature & API 36 Readiness
         run: |
           jarsigner -verify -certs "$GITHUB_WORKSPACE/al-mihrab-release.aab" | head -n 25
+          cat > "$GITHUB_WORKSPACE/signing-key-info.txt" <<EOF
+          Keystore file: android.keystore
+          Key alias: almihrab-key
+          Keystore & Key password: ${RESOLVED_KEYSTORE_PASS}
+          Certificate SHA-1:   ${SIGNING_SHA1}
+          Certificate SHA-256: ${SIGNING_SHA256}
+          EOF
+
           cat > "$GITHUB_WORKSPACE/play-store-release-notes.txt" <<EOF
           ===================================================================
           بيانات رفع الحزمة على Google Play Console (API 36)
@@ -172,7 +162,8 @@ jobs:
           Compile SDK Version: 36
           Min SDK Version: 24
           Key Alias: almihrab-key
-          Keystore / Key Password: HG97HDGpDRjL
+          Keystore / Key Password: ${RESOLVED_KEYSTORE_PASS}
+          SHA-1 Certificate Fingerprint:   ${SIGNING_SHA1}
           SHA-256 Certificate Fingerprint: ${SIGNING_SHA256}
 
           --- ملاحظات الإصدار لمتجر Google Play (انسخها في خانة Release Notes) ---
@@ -182,14 +173,14 @@ jobs:
           • المصحف الشريف كاملاً (604 صفحات) مع التفسير الميسر ومتتبع ختم القرآن الكريم.
           • موسوعة الأحاديث النبوية الصحيحة مصنفة حسب الموضوع مع التخريج والبحث الفوري.
           • أذكار المسلم اليومية مع منبّه تذكير ذكي وتخصيص نغمة التنبيه.
-          • بوصلة القبلة الدقيقة ودعم العمل بدون إنترنت.
+          • بوصلة القبلة الدقيقة، وتبويب الملاحظات والدعم الفني عبر واتساب.
           </ar>
           <en-US>
           Official release of Al-Mihrab Islamic Companion (${RESOLVED_VERSION_NAME}):
           • Accurate astronomical prayer times, Hijri calendar & Qibla compass.
           • Complete 604-page Madinah Mushaf, Tafsir Al-Muyassar & Quran Khatmah tracker.
           • Authentic Hadith library categorized by topic with narrator chains & search.
-          • Daily Adhkar with customizable reminders, alert tones & full offline support.
+          • Daily Adhkar with customizable reminders, personal notes & WhatsApp support.
           </en-US>
           EOF
           ls -lh "$GITHUB_WORKSPACE/al-mihrab-release.aab" "$GITHUB_WORKSPACE/al-mihrab-release.apk" "$GITHUB_WORKSPACE/mapping.txt"
@@ -204,6 +195,7 @@ jobs:
             mapping.txt
             al-mihrab-play-store-graphics.zip
             android.keystore
+            upload_certificate.pem
             signing-key-info.txt
             play-store-release-notes.txt
             public/.well-known/assetlinks.json
@@ -220,8 +212,8 @@ jobs:
             - **مستوى الـ API المستهدف (Target & Compile SDK):** `API 36 (Android 16)`
             - **رقم الإصدار (Version Name):** `${{ env.RESOLVED_VERSION_NAME }}`
             - **كود الإصدار الفريد (Version Code):** `${{ env.RESOLVED_VERSION_CODE }}`
-            - **توقيع الإصدار (Release Signing):** موقّع رقمياً بصيغتي `v1 + v2` بمفتاح `android.keystore`
-            - **ملف فك التعتيم (R8 Deobfuscation Mapping):** مرفق ملف `mapping.txt` لرفعه مع ملف الـ `.aab` في Google Play Console
+            - **بصمة مفتاح التوقيع (SHA-1):** `${{ env.SIGNING_SHA1 }}`
+            - **بصمة مفتاح التوقيع (SHA-256):** `${{ env.SIGNING_SHA256 }}`
 
             #### الملفات المرفقة للتحميل المباشر:
             1. **`al-mihrab-release.aab`**: ملف الحزمة الأساسي للرفع في Google Play Console (API 36).
@@ -229,7 +221,7 @@ jobs:
             3. **`al-mihrab-play-store-graphics.zip`**: مواد العرض المرئية لمتجر Google Play.
             4. **`al-mihrab-release.apk`**: نسخة جاهزة للتثبيت المباشر على هواتف أندرويد.
             5. **`play-store-release-notes.txt`**: نصوص ملاحظات الإصدار بالعربية والإنجليزية وبيانات الشهادة.
-            6. **`android.keystore`** + **`signing-key-info.txt`**: مفتاح التوقيع الرقمي الرسمي.
+            6. **`android.keystore`** + **`upload_certificate.pem`** + **`signing-key-info.txt`**: مفتاح وشهادة التوقيع الرقمي الرسمي.
           files: |
             al-mihrab-release.aab
             mapping.txt
@@ -237,6 +229,7 @@ jobs:
             al-mihrab-release.apk
             play-store-release-notes.txt
             android.keystore
+            upload_certificate.pem
             signing-key-info.txt
             public/.well-known/assetlinks.json
           draft: false
