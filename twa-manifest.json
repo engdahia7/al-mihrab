@@ -63,8 +63,8 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "minSdkVersion": 21,
-  "targetSdkVersion": 35,
+  "minSdkVersion": 24,
+  "targetSdkVersion": 36,
   "orientation": "portrait"
 }
 

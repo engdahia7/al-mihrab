@@ -12,6 +12,7 @@ import {
   Bell,
   VolumeX,
   X,
+  MessageCircle,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -28,6 +29,7 @@ import { QuranView } from './components/QuranView';
 import { AdhkarView } from './components/AdhkarView';
 import { DuasView } from './components/DuasView';
 import { QiblaAndSourcesView } from './components/QiblaAndSourcesView';
+import { SupportAndNotesView } from './components/SupportAndNotesView';
 import { QuranRadioBar } from './components/QuranRadioBar';
 import { OfflineAndPWAHub } from './components/OfflineAndPWAHub';
 import { SmartIslamicWidgets } from './components/SmartIslamicWidgets';
@@ -70,7 +72,13 @@ import type { WorshipHubSubSection } from './components/WorshipAndQadaHub';
 import type { DuasSectionId } from './components/DuasView';
 import type { QiblaSubTab } from './components/QiblaAndSourcesView';
 
-export type ActiveTab = 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
+export type ActiveTab =
+  | 'prayers'
+  | 'quran'
+  | 'adhkar'
+  | 'duas'
+  | 'qibla'
+  | 'support';
 
 const SETTINGS_STORAGE_KEY = 'almihrab_user_settings_v1';
 
@@ -110,6 +118,12 @@ const NAV_ITEMS: {
     labelMobile: 'القبلة',
     icon: Compass,
   },
+  {
+    id: 'support',
+    labelDesktop: 'الملاحظات والتواصل',
+    labelMobile: 'التواصل',
+    icon: MessageCircle,
+  },
 ];
 
 export default function App() {
@@ -121,7 +135,8 @@ export default function App() {
         tabParam === 'quran' ||
         tabParam === 'adhkar' ||
         tabParam === 'duas' ||
-        tabParam === 'qibla'
+        tabParam === 'qibla' ||
+        tabParam === 'support'
       ) {
         return tabParam;
       }
@@ -793,6 +808,8 @@ export default function App() {
             navigationSignal={navigationSignal}
           />
         )}
+
+        {activeTab === 'support' && <SupportAndNotesView />}
       </main>
 
       {/* Waqf & Sadaqah Jariyah Dedication Footer (Clean & Non-Repetitive) */}
@@ -859,7 +876,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Sources & Privacy Policy Row */}
+          {/* Sources, Support WhatsApp & Privacy Policy Row */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500 pt-0.5">
             <div className="text-center sm:text-right">
               <span className="font-display font-bold text-stone-800">المحراب</span>
@@ -868,12 +885,36 @@ export default function App() {
                 مصحف المدينة النبوية · حصن المسلم · المواقيت الفلكية والمواريث الشرعية
               </span>
             </div>
-            <a
-              href="./privacy-policy.html"
-              className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium"
-            >
-              سياسة الخصوصية
-            </a>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <a
+                href="https://wa.me/966564895972"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="footer-whatsapp-support-link"
+                className="inline-flex items-center gap-1 text-[#14532D] hover:underline underline-offset-4 whitespace-nowrap font-bold"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>الدعم الفني واتساب:</span>
+                <span dir="ltr" className="font-mono">
+                  00966564895972
+                </span>
+              </a>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('support')}
+                className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium cursor-pointer"
+              >
+                الملاحظات والتواصل
+              </button>
+              <span aria-hidden="true">·</span>
+              <a
+                href="./privacy-policy.html"
+                className="hover:text-[#14532D] underline-offset-4 hover:underline whitespace-nowrap font-medium"
+              >
+                سياسة الخصوصية
+              </a>
+            </div>
           </div>
         </div>
       </footer>
@@ -884,7 +925,7 @@ export default function App() {
         data-testid="mobile-bottom-nav"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FBF9F5]/95 backdrop-blur-md border-t border-stone-200 shadow-lg"
       >
-        <div className="grid grid-cols-5 items-center h-16 px-1">
+        <div className="grid grid-cols-6 items-center h-16 px-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

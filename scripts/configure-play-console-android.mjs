@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Automatically patches the Capacitor Android project to satisfy all
- * Google Play Console requirements (Target SDK 35 / Android 15, unique versionCode,
+ * Google Play Console requirements (Target SDK 36 / API 36, unique versionCode,
  * release signing config, R8 minification/deobfuscation mapping, RTL support,
  * optional hardware features, and official launcher icons).
  */
@@ -18,39 +18,43 @@ if (!fs.existsSync(androidDir)) {
 }
 
 const runNumber = Number(process.env.GITHUB_RUN_NUMBER || '1');
-const versionCode = Number(process.env.APP_VERSION_CODE || String(100 + runNumber));
-const versionName = process.env.APP_VERSION_NAME || `2.5.${runNumber}`;
+const versionCode = Number(process.env.APP_VERSION_CODE || String(200 + runNumber));
+const versionName = process.env.APP_VERSION_NAME || `2.6.${runNumber}`;
 const keystorePath = process.env.KEYSTORE_FILE || path.join(rootDir, 'android.keystore');
 const keystorePass = process.env.KEYSTORE_PASSWORD || 'HG97HDGpDRjL';
 const keyAlias = process.env.KEY_ALIAS || 'almihrab-key';
 
 console.log(`[Play Console Config] Configuring Android project:`);
 console.log(`  - Package ID:       app.almihrab.twa`);
-console.log(`  - Target SDK:       35 (Android 15)`);
-console.log(`  - Compile SDK:      35`);
+console.log(`  - Target SDK:       36 (API Level 36 - Android 16)`);
+console.log(`  - Compile SDK:      36`);
 console.log(`  - Min SDK:          24`);
 console.log(`  - Version Code:     ${versionCode}`);
 console.log(`  - Version Name:     ${versionName}`);
 
-// 1. Patch android/variables.gradle for Target SDK 35 & Compile SDK 35
+// 1. Patch android/variables.gradle for Target SDK 36 & Compile SDK 36
 const variablesGradlePath = path.join(androidDir, 'variables.gradle');
 if (fs.existsSync(variablesGradlePath)) {
   let varsContent = fs.readFileSync(variablesGradlePath, 'utf8');
   varsContent = varsContent
     .replace(/minSdkVersion\s*=\s*\d+/g, 'minSdkVersion = 24')
-    .replace(/compileSdkVersion\s*=\s*\d+/g, 'compileSdkVersion = 35')
-    .replace(/targetSdkVersion\s*=\s*\d+/g, 'targetSdkVersion = 35');
+    .replace(/compileSdkVersion\s*=\s*\d+/g, 'compileSdkVersion = 36')
+    .replace(/targetSdkVersion\s*=\s*\d+/g, 'targetSdkVersion = 36');
   fs.writeFileSync(variablesGradlePath, varsContent, 'utf8');
-  console.log('[Play Console Config] Updated android/variables.gradle to SDK 35.');
+  console.log('[Play Console Config] Updated android/variables.gradle to SDK 36.');
 }
 
-// 2. Patch android/app/build.gradle for versionCode, versionName, Signing, and R8 Mapping
+// 2. Patch android/app/build.gradle for versionCode, versionName, targetSdk 36, Signing, and R8 Mapping
 const appBuildGradlePath = path.join(androidDir, 'app', 'build.gradle');
 if (fs.existsSync(appBuildGradlePath)) {
   let buildGradle = fs.readFileSync(appBuildGradlePath, 'utf8');
 
-  // Update versionCode & versionName
+  // Force compileSdk 36 and targetSdkVersion 36 explicitly as well
   buildGradle = buildGradle
+    .replace(/compileSdk\s+rootProject\.ext\.compileSdkVersion/g, 'compileSdk 36')
+    .replace(/compileSdkVersion\s+rootProject\.ext\.compileSdkVersion/g, 'compileSdkVersion 36')
+    .replace(/targetSdkVersion\s+rootProject\.ext\.targetSdkVersion/g, 'targetSdkVersion 36')
+    .replace(/targetSdk\s+rootProject\.ext\.targetSdkVersion/g, 'targetSdk 36')
     .replace(/versionCode\s+\d+/g, `versionCode ${versionCode}`)
     .replace(/versionName\s+"[^"]*"/g, `versionName "${versionName}"`);
 
@@ -104,16 +108,15 @@ if (fs.existsSync(appBuildGradlePath)) {
   );
 
   fs.writeFileSync(appBuildGradlePath, buildGradle, 'utf8');
-  console.log('[Play Console Config] Updated android/app/build.gradle with release signing & R8 mapping.');
+  console.log('[Play Console Config] Updated android/app/build.gradle with API 36, release signing & R8 mapping.');
 }
 
-// 3. Patch android/gradle.properties for memory, AndroidX, and non-transitive R class
+// 3. Patch android/gradle.properties to allow Compile SDK 36 without warnings
 const gradlePropsPath = path.join(androidDir, 'gradle.properties');
 if (fs.existsSync(gradlePropsPath)) {
   let gradleProps = fs.readFileSync(gradlePropsPath, 'utf8');
-  if (!gradleProps.includes('android.suppressUnsupportedCompileSdk')) {
-    gradleProps += '\nandroid.suppressUnsupportedCompileSdk=35\n';
-  }
+  gradleProps = gradleProps.replace(/android\.suppressUnsupportedCompileSdk=.*/g, '');
+  gradleProps += '\nandroid.suppressUnsupportedCompileSdk=36,35\n';
   fs.writeFileSync(gradlePropsPath, gradleProps, 'utf8');
 }
 

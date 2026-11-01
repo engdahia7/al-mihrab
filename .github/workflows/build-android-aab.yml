@@ -1,4 +1,4 @@
-name: Build & Release Google Play Console AAB (API 35)
+name: Build & Release Google Play Console AAB (API 36)
 
 on:
   push:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build-play-console-aab:
-    name: Build Google Play Console Compliant AAB (Target SDK 35)
+    name: Build Google Play Console Compliant AAB (Target SDK 36)
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +39,7 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Configure Built-in Android SDK 35 (Android 15) & Accept Licenses
+      - name: Configure Built-in Android SDK 36 (API Level 36) & Accept Licenses
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
@@ -47,7 +47,7 @@ jobs:
           fi
           echo "Using sdkmanager: $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Prepare Release Signing Keystore & Digital Asset Links (SHA-256)
         env:
@@ -104,15 +104,15 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Generate & Patch Android Project for Google Play Console (API 35)
+      - name: Generate & Patch Android Project for Google Play Console (API 36)
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           APP_VERSION_NAME: ${{ github.event.inputs.app_version_name }}
           APP_VERSION_CODE: ${{ github.event.inputs.app_version_code }}
         run: |
           PASS="${KEYSTORE_PASSWORD:-HG97HDGpDRjL}"
-          V_CODE="${APP_VERSION_CODE:-$((100 + GITHUB_RUN_NUMBER))}"
-          V_NAME="${APP_VERSION_NAME:-2.5.${GITHUB_RUN_NUMBER}}"
+          V_CODE="${APP_VERSION_CODE:-$((200 + GITHUB_RUN_NUMBER))}"
+          V_NAME="${APP_VERSION_NAME:-2.6.${GITHUB_RUN_NUMBER}}"
           echo "RESOLVED_VERSION_CODE=$V_CODE" >> "$GITHUB_ENV"
           echo "RESOLVED_VERSION_NAME=$V_NAME" >> "$GITHUB_ENV"
 
@@ -154,19 +154,22 @@ jobs:
           if [ ! -f signing-key-info.txt ] && [ -f releases/signing-key-info.txt ]; then
             cp releases/signing-key-info.txt signing-key-info.txt
           fi
+          if [ -f releases/al-mihrab-play-store-graphics.zip ]; then
+            cp releases/al-mihrab-play-store-graphics.zip al-mihrab-play-store-graphics.zip
+          fi
 
-      - name: Verify AAB Digital Signature & Google Play Readiness
+      - name: Verify AAB Digital Signature & API 36 Readiness
         run: |
           jarsigner -verify -certs "$GITHUB_WORKSPACE/al-mihrab-release.aab" | head -n 25
           cat > "$GITHUB_WORKSPACE/play-store-release-notes.txt" <<EOF
           ===================================================================
-          بيانات رفع الحزمة على Google Play Console (Production / Internal Testing)
+          بيانات رفع الحزمة على Google Play Console (API 36)
           ===================================================================
           Package Name (معرف الحزمة): app.almihrab.twa
           Version Name (رقم الإصدار): ${RESOLVED_VERSION_NAME}
           Version Code (كود الإصدار): ${RESOLVED_VERSION_CODE}
-          Target SDK Version: 35 (Android 15 Compliant)
-          Compile SDK Version: 35
+          Target SDK Version: 36 (API Level 36 Compliant)
+          Compile SDK Version: 36
           Min SDK Version: 24
           Key Alias: almihrab-key
           Keystore / Key Password: HG97HDGpDRjL
@@ -174,19 +177,19 @@ jobs:
 
           --- ملاحظات الإصدار لمتجر Google Play (انسخها في خانة Release Notes) ---
           <ar>
-          تحديث شامل لتطبيق المحراب (${RESOLVED_VERSION_NAME}):
-          • مواقيت الصلاة الفلكية الدقيقة وبوصلة القبلة الميدانية.
-          • المصحف الشريف كاملاً (٦٠٤ صفحات) مع التفسير الميسر ومتتبع ختم القرآن الكريم.
-          • موسوعة الأحاديث النبوية الصحيحة المصنفة موضوعياً مع البحث الفوري وتخريج الرواة.
-          • أذكار المسلم اليومية مع نظام التنبيهات الذكي وتخصيص أصوات التذكير.
-          • دعم كامل للعمل بدون إنترنت (Offline Mode).
+          الإصدار الرسمي لتطبيق «المحراب» (${RESOLVED_VERSION_NAME}):
+          • مواقيت الصلاة الفلكية الدقيقة مع عداد الصلاة القادمة والتقويم الهجري.
+          • المصحف الشريف كاملاً (604 صفحات) مع التفسير الميسر ومتتبع ختم القرآن الكريم.
+          • موسوعة الأحاديث النبوية الصحيحة مصنفة حسب الموضوع مع التخريج والبحث الفوري.
+          • أذكار المسلم اليومية مع منبّه تذكير ذكي وتخصيص نغمة التنبيه.
+          • بوصلة القبلة الدقيقة ودعم العمل بدون إنترنت.
           </ar>
           <en-US>
-          Al-Mihrab Islamic Companion (${RESOLVED_VERSION_NAME}):
-          • High-precision astronomical prayer times & Qibla compass.
+          Official release of Al-Mihrab Islamic Companion (${RESOLVED_VERSION_NAME}):
+          • Accurate astronomical prayer times, Hijri calendar & Qibla compass.
           • Complete 604-page Madinah Mushaf, Tafsir Al-Muyassar & Quran Khatmah tracker.
-          • Authentic Hadith library categorized by topic with narrator chains & instant search.
-          • Customizable Adhkar reminders with selectable alert tones and full offline support.
+          • Authentic Hadith library categorized by topic with narrator chains & search.
+          • Daily Adhkar with customizable reminders, alert tones & full offline support.
           </en-US>
           EOF
           ls -lh "$GITHUB_WORKSPACE/al-mihrab-release.aab" "$GITHUB_WORKSPACE/al-mihrab-release.apk" "$GITHUB_WORKSPACE/mapping.txt"
@@ -199,6 +202,7 @@ jobs:
             al-mihrab-release.aab
             al-mihrab-release.apk
             mapping.txt
+            al-mihrab-play-store-graphics.zip
             android.keystore
             signing-key-info.txt
             play-store-release-notes.txt
@@ -209,26 +213,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.RESOLVED_VERSION_NAME }}
-          name: "حزمة Google Play Console (API 35) — v${{ env.RESOLVED_VERSION_NAME }} (Code ${{ env.RESOLVED_VERSION_CODE }})"
+          name: "حزمة Google Play Console (API 36) — v${{ env.RESOLVED_VERSION_NAME }} (Code ${{ env.RESOLVED_VERSION_CODE }})"
           body: |
             ### حزمة تطبيق المحراب المعتمدة لمتجر Google Play Console (`al-mihrab-release.aab`)
-            متوافقة ١٠٠٪ مع متطلبات سياسات Google Play لعام 2025/2026:
             - **معرّف الحزمة (Package ID):** `app.almihrab.twa`
-            - **مستوى الـ API المستهدف (Target & Compile SDK):** `API 35 (Android 15)`
+            - **مستوى الـ API المستهدف (Target & Compile SDK):** `API 36 (Android 16)`
             - **رقم الإصدار (Version Name):** `${{ env.RESOLVED_VERSION_NAME }}`
-            - **كود الإصدار الفريد (Version Code):** `${{ env.RESOLVED_VERSION_CODE }}` (يزداد تلقائياً مع كل دفعة لمنع خطأ تكرار الإصدار في Play Console)
+            - **كود الإصدار الفريد (Version Code):** `${{ env.RESOLVED_VERSION_CODE }}`
             - **توقيع الإصدار (Release Signing):** موقّع رقمياً بصيغتي `v1 + v2` بمفتاح `android.keystore`
-            - **ملف فك التعتيم (R8 Deobfuscation Mapping):** مرفق ملف `mapping.txt` لرفعه مع ملف الـ `.aab` في Google Play Console لإزالة تحذيرات الكود المعمّى
+            - **ملف فك التعتيم (R8 Deobfuscation Mapping):** مرفق ملف `mapping.txt` لرفعه مع ملف الـ `.aab` في Google Play Console
 
             #### الملفات المرفقة للتحميل المباشر:
-            1. **`al-mihrab-release.aab`**: ملف الحزمة الأساسي للرفع في Google Play Console.
+            1. **`al-mihrab-release.aab`**: ملف الحزمة الأساسي للرفع في Google Play Console (API 36).
             2. **`mapping.txt`**: ملف رموز R8/ProGuard (يُرفع في خانة ReTrace mapping file في Play Console).
-            3. **`al-mihrab-release.apk`**: نسخة جاهزة للتثبيت المباشر على هواتف أندرويد.
-            4. **`play-store-release-notes.txt`**: نصوص ملاحظات الإصدار بالعربية والإنجليزية وبيانات الشهادة.
-            5. **`android.keystore`** + **`signing-key-info.txt`**: مفتاح التوقيع الرقمي الرسمي.
+            3. **`al-mihrab-play-store-graphics.zip`**: مواد العرض المرئية لمتجر Google Play.
+            4. **`al-mihrab-release.apk`**: نسخة جاهزة للتثبيت المباشر على هواتف أندرويد.
+            5. **`play-store-release-notes.txt`**: نصوص ملاحظات الإصدار بالعربية والإنجليزية وبيانات الشهادة.
+            6. **`android.keystore`** + **`signing-key-info.txt`**: مفتاح التوقيع الرقمي الرسمي.
           files: |
             al-mihrab-release.aab
             mapping.txt
+            al-mihrab-play-store-graphics.zip
             al-mihrab-release.apk
             play-store-release-notes.txt
             android.keystore
