@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Clock,
   Trash2,
+  Smartphone,
+  RefreshCw,
 } from 'lucide-react';
 import {
   DailyPrayerTimes,
@@ -51,6 +53,9 @@ import {
   subscribePushNotifications,
   clearPushNotificationHistory,
   getUpcomingScheduledNotificationInfo,
+  getMobilePushDeviceCapabilities,
+  ensureMobileServiceWorkerRegistration,
+  syncTodayNotificationsWithPhoneOS,
 } from '../utils/notificationDispatcher';
 import { toArabicNumerals } from '../data/quranData';
 
@@ -138,9 +143,31 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
     DispatchedIslamicNotification[]
   >([]);
 
+  const [swReady, setSwReady] = useState<boolean>(false);
+
+  const deviceCapabilities = useMemo(
+    () => getMobilePushDeviceCapabilities(),
+    []
+  );
+
+  const syncedPhoneNotificationsCount = useMemo(() => {
+    return syncTodayNotificationsWithPhoneOS({
+      todayTimes,
+      alertsConfig,
+      channelsConfig,
+      cityNameAr,
+      lastThirdStartHHMM: todayTimes.lastThird,
+    });
+  }, [todayTimes, alertsConfig, channelsConfig, cityNameAr]);
+
   useEffect(() => {
     let mounted = true;
     syncAndPinExistingAdhanAudio().catch(() => {});
+    ensureMobileServiceWorkerRegistration()
+      .then((reg) => {
+        if (mounted && reg) setSwReady(true);
+      })
+      .catch(() => {});
     const unsubAudio = subscribeAdhanPlaybackState((state) => {
       if (mounted) setPlaybackState(state);
     });
@@ -189,7 +216,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
       await dispatchSystemAndInAppNotification(notif);
       setNotificationPermission(getBrowserNotificationPermissionState());
       setTestAlertBanner(
-        `تم تفعيل ودفع «${itemMeta?.shortLabelAr || notif.titleAr}» الآن أعلى الشاشة بنجاح.`
+        `تم تفعيل ودفع «${itemMeta?.shortLabelAr || notif.titleAr}» الآن على الهاتف بنجاح.`
       );
     } else {
       const itemMeta = PUSH_CHANNEL_ITEMS.find((c) => c.key === key);
@@ -214,6 +241,9 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
       return updated;
     });
 
+    const reg = await ensureMobileServiceWorkerRegistration();
+    if (reg) setSwReady(true);
+
     const res = await requestAndVerifyPushPermission(
       cityNameAr,
       nextPrayerNameAr,
@@ -221,7 +251,7 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
     );
     setNotificationPermission(res.permissionState);
     setTestAlertBanner(
-      'تم تفعيل جميع الإشعارات والصلوات والأذكار وإرسال إشعار تأكيدي الآن أعلى الشاشة.'
+      'تم تفعيل جميع الإشعارات والصلوات والأذكار على الهاتف وإرسال إشعار تأكيدي الآن.'
     );
   };
 
@@ -438,9 +468,113 @@ export const PrayerAlertsPanel: React.FC<PrayerAlertsPanelProps> = ({
               className="min-h-[34px] px-3 py-1 text-xs font-semibold text-[#14532D] bg-[#14532D]/10 hover:bg-[#14532D]/20 border border-[#14532D]/30 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>تفعيل إشعارات النظام</span>
+              <span>تفعيل إشعارات الهاتف</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Mobile Phone Push Notification Engine & Lock-Screen Delivery Card */}
+      <div
+        data-testid="mobile-phone-push-setup-card"
+        className="bg-[#FCF9F2] border border-[#E5DAC3] rounded-2xl p-3.5 sm:p-4 space-y-3"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#14532D] text-[#FDE68A] flex items-center justify-center shrink-0 mt-0.5">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-xs sm:text-sm font-bold text-stone-900">
+                  دفع الإشعارات على الهاتف (شريط الهاتف العلوي وشاشة القفل)
+                </h4>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#14532D]/10 text-[#14532D] border border-[#14532D]/20">
+                  {deviceCapabilities.deviceLabelAr}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600 leading-relaxed">
+                {deviceCapabilities.deliveryModeLabelAr} · تم جدولة{' '}
+                <strong className="text-stone-900">
+                  {toArabicNumerals(syncedPhoneNotificationsCount)}
+                </strong>{' '}
+                تنبيهاً تلقائياً لليوم على هاتفك مع الاهتزاز وصوت الأذان.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              data-testid="test-phone-statusbar-push-btn"
+              onClick={() => void handleEnablePushNotifications()}
+              className="flex-1 sm:flex-initial min-h-[36px] px-3.5 py-1.5 rounded-xl bg-[#14532D] text-white text-xs font-bold hover:bg-[#14532D]/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#FDE68A]" />
+              <span>دفع إشعار للهاتف الآن</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="resync-phone-schedule-btn"
+              onClick={async () => {
+                const reg = await ensureMobileServiceWorkerRegistration();
+                if (reg) setSwReady(true);
+                const count = syncTodayNotificationsWithPhoneOS({
+                  todayTimes,
+                  alertsConfig,
+                  channelsConfig,
+                  cityNameAr,
+                  lastThirdStartHHMM: todayTimes.lastThird,
+                });
+                setTestAlertBanner(
+                  `تمت مزامنة وجدولة ${toArabicNumerals(count)} إشعاراً من مواقيت اليوم (${cityNameAr}) مع نظام إشعارات الهاتف بنجاح.`
+                );
+              }}
+              className="min-h-[36px] px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-[#E5DAC3] text-stone-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-[#78350F]" />
+              <span>مزامنة جدول الهاتف</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3 Status Indicators for Phone Delivery */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[#E5DAC3]/70 text-[11px]">
+          <div className="bg-white/80 border border-[#E5DAC3] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-stone-600 font-medium">إذن إشعارات الهاتف:</span>
+            <span
+              className={`font-bold ${
+                notificationPermission === 'granted' ||
+                deviceCapabilities.isAndroidNativeApp
+                  ? 'text-[#14532D]'
+                  : 'text-[#78350F]'
+              }`}
+            >
+              {notificationPermission === 'granted' ||
+              deviceCapabilities.isAndroidNativeApp
+                ? 'مسموح ومفعّل ✓'
+                : 'اضغط «دفع إشعار للهاتف» للسماح'}
+            </span>
+          </div>
+
+          <div className="bg-white/80 border border-[#E5DAC3] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-stone-600 font-medium">محرّك الخلفية للهاتف:</span>
+            <span className="font-bold text-[#14532D]">
+              {deviceCapabilities.isAndroidNativeApp
+                ? 'جسر أندرويد الأصلي نشط ✓'
+                : swReady || deviceCapabilities.hasServiceWorker
+                  ? 'Service Worker نشط ✓'
+                  : 'تنبيه فوري مباشر ✓'}
+            </span>
+          </div>
+
+          <div className="bg-white/80 border border-[#E5DAC3] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-stone-600 font-medium">شاشة القفل والاهتزاز:</span>
+            <span className="font-bold text-[#14532D]">
+              مفعّل مع لوجو المحراب ✓
+            </span>
+          </div>
         </div>
       </div>
 

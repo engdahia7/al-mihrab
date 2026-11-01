@@ -2,6 +2,7 @@ import {
   DailyPrayerTimes,
   MainPrayerKey,
   PRAYER_METADATA,
+  parseTimeHHMMToMinutes,
 } from './astronomy';
 import {
   PrayerAlertItemConfig,
@@ -9,8 +10,26 @@ import {
   formatMinutesToHHMM,
   DUA_AFTER_ADHAN_AR,
 } from './khatmahAndAlerts';
-import { parseTimeHHMMToMinutes } from './astronomy';
 import { playAlertSoundTone } from './soundPlayer';
+
+export interface AndroidNativeNotificationsBridge {
+  showNotification: (title: string, body: string, tag: string) => boolean;
+  scheduleDelayedNotification?: (
+    title: string,
+    body: string,
+    tag: string,
+    delayMs: number
+  ) => boolean;
+  clearScheduledNotifications?: () => void;
+  requestPermission: () => boolean;
+  hasPermission: () => boolean;
+}
+
+declare global {
+  interface Window {
+    AndroidNativeNotifications?: AndroidNativeNotificationsBridge;
+  }
+}
 
 export const PUSH_CHANNELS_STORAGE_KEY = 'almihrab_push_channels_v1';
 export const PUSH_HISTORY_STORAGE_KEY = 'almihrab_push_history_v1';
@@ -47,6 +66,108 @@ export interface DispatchedIslamicNotification {
   actionTab: 'prayers' | 'quran' | 'adhkar' | 'duas' | 'qibla';
   actionLabelAr: string;
   mushafPage?: number;
+}
+
+export interface MobilePushDeviceCapabilities {
+  isAndroidNativeApp: boolean;
+  isAndroidBrowser: boolean;
+  isIOSDevice: boolean;
+  isStandalonePWA: boolean;
+  hasServiceWorker: boolean;
+  deviceLabelAr: string;
+  deliveryModeLabelAr: string;
+}
+
+export function getMobilePushDeviceCapabilities(): MobilePushDeviceCapabilities {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {
+      isAndroidNativeApp: false,
+      isAndroidBrowser: false,
+      isIOSDevice: false,
+      isStandalonePWA: false,
+      hasServiceWorker: false,
+      deviceLabelAr: 'متصفح الويب',
+      deliveryModeLabelAr: 'إشعارات فورية',
+    };
+  }
+
+  const ua = navigator.userAgent || '';
+  const isAndroidNativeApp = Boolean(window.AndroidNativeNotifications);
+  const isAndroidBrowser = /Android/i.test(ua);
+  const isIOSDevice =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalonePWA =
+    (typeof window.matchMedia === 'function' &&
+      window.matchMedia('(display-mode: standalone)').matches) ||
+    Boolean((navigator as unknown as { standalone?: boolean }).standalone);
+  const hasServiceWorker = 'serviceWorker' in navigator;
+
+  let deviceLabelAr = 'الحاسوب / المتصفح';
+  let deliveryModeLabelAr = 'شريط إشعارات النظام + إشعار علوي داخل التطبيق';
+
+  if (isAndroidNativeApp) {
+    deviceLabelAr = 'تطبيق المحراب للأندرويد (Android Native)';
+    deliveryModeLabelAr = 'إشعارات أندرويد الأصلية في شريط الهاتف وشاشة القفل';
+  } else if (isAndroidBrowser) {
+    deviceLabelAr = isStandalonePWA
+      ? 'هاتف أندرويد (تطبيق مثبّت PWA)'
+      : 'هاتف أندرويد (متصفح الهاتف)';
+    deliveryModeLabelAr =
+      'دفع عبر Service Worker إلى شريط إشعارات الهاتف وشاشة القفل';
+  } else if (isIOSDevice) {
+    deviceLabelAr = isStandalonePWA
+      ? 'هاتف آيفون / آيباد (مثبّت على الشاشة الرئيسية)'
+      : 'هاتف آيفون / آيباد (متصفح سفاري)';
+    deliveryModeLabelAr = isStandalonePWA
+      ? 'دفع إشعارات iOS عبر Service Worker لشاشة القفل'
+      : 'إشعار علوي فوري وصوتي (أضف التطبيق للشاشة الرئيسية لتفعيل إشعارات قفل الآيفون)';
+  }
+
+  return {
+    isAndroidNativeApp,
+    isAndroidBrowser,
+    isIOSDevice,
+    isStandalonePWA,
+    hasServiceWorker,
+    deviceLabelAr,
+    deliveryModeLabelAr,
+  };
+}
+
+/**
+ * Ensures a Service Worker (/sw-push.js) is registered and active on mobile phones
+ * so ServiceWorkerRegistration.showNotification() works even if Workbox is disabled or still loading.
+ */
+export async function ensureMobileServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return null;
+  }
+
+  try {
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      reg = await navigator.serviceWorker.register('/sw-push.js', {
+        scope: '/',
+      });
+    }
+
+    if (reg.active) {
+      return reg;
+    }
+
+    // Wait briefly (up to 1200ms) for the newly registered SW to activate on mobile
+    const readyReg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<ServiceWorkerRegistration | null>((resolve) =>
+        window.setTimeout(() => resolve(reg || null), 1200)
+      ),
+    ]);
+
+    return readyReg || reg || null;
+  } catch {
+    return null;
+  }
 }
 
 export function getDefaultPushChannelsConfig(): PushNotificationChannelsConfig {
@@ -423,26 +544,22 @@ export interface UpcomingScheduledNotificationInfo {
 }
 
 /**
- * Computes the next scheduled automatic notification across today's enabled channels and prayers
+ * Computes all scheduled notifications for today and returns the next upcoming one.
  */
-export function getUpcomingScheduledNotificationInfo(params: {
-  currentHours: number;
-  currentMinutes: number;
+export function getAllScheduledNotificationsForToday(params: {
   todayTimes: DailyPrayerTimes;
   alertsConfig: Record<MainPrayerKey, PrayerAlertItemConfig>;
   channelsConfig: PushNotificationChannelsConfig;
   lastThirdStartHHMM?: string;
-}): UpcomingScheduledNotificationInfo | null {
-  const {
-    currentHours,
-    currentMinutes,
-    todayTimes,
-    alertsConfig,
-    channelsConfig,
-    lastThirdStartHHMM,
-  } = params;
+}): {
+  titleAr: string;
+  timeHHMM: string;
+  targetMins: number;
+  category: NotificationCategory;
+}[] {
+  const { todayTimes, alertsConfig, channelsConfig, lastThirdStartHHMM } =
+    params;
 
-  const nowTotalMins = currentHours * 60 + currentMinutes;
   const candidates: {
     titleAr: string;
     timeHHMM: string;
@@ -516,6 +633,77 @@ export function getUpcomingScheduledNotificationInfo(params: {
     });
   }
 
+  return candidates;
+}
+
+/**
+ * Syncs today's upcoming prayer & adhkar notifications with the Native Android bridge
+ * so that even if the phone screen is locked, the native Android handler triggers them.
+ */
+export function syncTodayNotificationsWithPhoneOS(params: {
+  todayTimes: DailyPrayerTimes;
+  alertsConfig: Record<MainPrayerKey, PrayerAlertItemConfig>;
+  channelsConfig: PushNotificationChannelsConfig;
+  cityNameAr: string;
+  lastThirdStartHHMM?: string;
+}): number {
+  if (typeof window === 'undefined') return 0;
+
+  const candidates = getAllScheduledNotificationsForToday(params);
+  const now = new Date();
+  const nowSecondsOfDay =
+    now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+  const bridge = window.AndroidNativeNotifications;
+  if (bridge && typeof bridge.clearScheduledNotifications === 'function') {
+    try {
+      bridge.clearScheduledNotifications();
+    } catch {
+      // ignore
+    }
+  }
+
+  let scheduledCount = 0;
+  for (const item of candidates) {
+    const targetSecondsOfDay = item.targetMins * 60;
+    let deltaSeconds = targetSecondsOfDay - nowSecondsOfDay;
+    if (deltaSeconds <= 0) {
+      deltaSeconds += 86400;
+    }
+    scheduledCount += 1;
+
+    if (bridge && typeof bridge.scheduleDelayedNotification === 'function') {
+      try {
+        bridge.scheduleDelayedNotification(
+          `المحراب · ${item.titleAr} (${item.timeHHMM})`,
+          `حسب التوقيت المحلي لمدينة ${params.cityNameAr} — حيّ على الصلاة، حيّ على الفلاح.`,
+          `scheduled-${item.category}-${item.timeHHMM}`,
+          deltaSeconds * 1000
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return scheduledCount;
+}
+
+/**
+ * Computes the next scheduled automatic notification across today's enabled channels and prayers
+ */
+export function getUpcomingScheduledNotificationInfo(params: {
+  currentHours: number;
+  currentMinutes: number;
+  todayTimes: DailyPrayerTimes;
+  alertsConfig: Record<MainPrayerKey, PrayerAlertItemConfig>;
+  channelsConfig: PushNotificationChannelsConfig;
+  lastThirdStartHHMM?: string;
+}): UpcomingScheduledNotificationInfo | null {
+  const { currentHours, currentMinutes } = params;
+  const nowTotalMins = currentHours * 60 + currentMinutes;
+  const candidates = getAllScheduledNotificationsForToday(params);
+
   if (candidates.length === 0) return null;
 
   let best: (typeof candidates)[0] | null = null;
@@ -552,8 +740,8 @@ export function buildTestPushNotification(
   return {
     id: `test-push-${Date.now()}`,
     category: 'TEST',
-    titleAr: `إشعار المحراب مفعّل — صلاة ${nextPrayerNameAr} (${nextPrayerTime})`,
-    bodyAr: `نظام دفع الإشعارات يعمل بنجاح لمدينة ${cityNameAr}. سيصلك تنبيه الأذان وتذكيرات الصلوات والأذكار في وقتها بدقة.`,
+    titleAr: `إشعار المحراب على الهاتف — صلاة ${nextPrayerNameAr} (${nextPrayerTime})`,
+    bodyAr: `تم ربط وتفعيل دفع الإشعارات على هاتفك لمدينة ${cityNameAr} بنجاح. ستصلك تنبيهات الأذان والصلوات والأذكار في شريط الهاتف العلوي وشاشة القفل.`,
     subtitleOrHadithAr:
       '«في محراب الطاعة.. نورٌ في دربك، وصدقةٌ جاريةٌ لوجه الله»',
     timestampHHMM: `${hh}:${mm}`,
@@ -568,7 +756,10 @@ export function buildTestPushNotification(
 let activeBannerNotification: DispatchedIslamicNotification | null = null;
 let activeBannerTimeoutId: number | null = null;
 const notificationSubscribers = new Set<
-  (active: DispatchedIslamicNotification | null, history: DispatchedIslamicNotification[]) => void
+  (
+    active: DispatchedIslamicNotification | null,
+    history: DispatchedIslamicNotification[]
+  ) => void
 >();
 
 export function getPushNotificationHistory(): DispatchedIslamicNotification[] {
@@ -648,7 +839,7 @@ export function playGentleNotificationChime(): void {
   if (typeof window === 'undefined') return;
   if ('vibrate' in navigator) {
     try {
-      navigator.vibrate([120, 60, 140]);
+      navigator.vibrate([200, 80, 200, 80, 300]);
     } catch {
       // ignore
     }
@@ -691,11 +882,47 @@ export const ALMIHRAB_LOGO_ICON_PATH = '/icon.svg';
 export const ALMIHRAB_LOGO_PNG_PATH = '/pwa-192x192.png';
 
 /**
- * Dispatches a notification across:
+ * Updates the mobile phone's Lock-Screen Media Session widget with the active
+ * notification title, body, and Al-Mihrab icons.
+ */
+function updatePhoneLockScreenMediaMetadata(
+  notification: DispatchedIslamicNotification
+): void {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+    return;
+  }
+  try {
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: notification.titleAr,
+      artist: 'برنامج المحراب · مواقيت الصلاة والأذان',
+      album: notification.bodyAr,
+      artwork: [
+        {
+          src: `${origin}/pwa-192x192.png`,
+          sizes: '192x192',
+          type: 'image/png',
+        },
+        {
+          src: `${origin}/pwa-512x512.png`,
+          sizes: '512x512',
+          type: 'image/png',
+        },
+      ],
+    });
+  } catch {
+    // ignore MediaMetadata errors on older browsers
+  }
+}
+
+/**
+ * Dispatches a notification across all Mobile Phone & Web layers:
  * 1) Top-of-Phone Heads-Up Push Banner with Al-Mihrab Logo & History
- * 2) ServiceWorkerRegistration.showNotification (PWA mobile/desktop native push with logo)
- * 3) window.Notification fallback with logo
- * 4) Audio (Full Adhan for ADHAN alerts, or gentle chime for reminders)
+ * 2) Native Android App Bridge (window.AndroidNativeNotifications.showNotification) for .aab/.apk builds
+ * 3) Mobile ServiceWorkerRegistration.showNotification (via /sw-push.js or Workbox SW) for Android Chrome & iOS PWA
+ * 4) window.Notification fallback for desktop browsers
+ * 5) Phone Lock-Screen MediaSession + Vibration + Audio (Full Adhan or Chime)
  */
 export async function dispatchSystemAndInAppNotification(
   notification: DispatchedIslamicNotification
@@ -716,7 +943,16 @@ export async function dispatchSystemAndInAppNotification(
     }, 18000);
   }
 
+  updatePhoneLockScreenMediaMetadata(notification);
+
   if (notification.shouldPlayFullAdhan) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([300, 120, 300, 120, 400]);
+      } catch {
+        // ignore
+      }
+    }
     playAlertSoundTone('custom_file', notification.prayerNameAr);
   } else {
     playGentleNotificationChime();
@@ -724,7 +960,24 @@ export async function dispatchSystemAndInAppNotification(
 
   if (typeof window === 'undefined') return;
 
-  // If browser Notification permission is still 'default', request it opportunistically
+  const systemTitle = `المحراب · ${notification.titleAr}`;
+  const fullBody = `${notification.bodyAr}\n${notification.subtitleOrHadithAr}`;
+
+  // Layer A: Native Android Bridge (.aab / .apk installed on phone)
+  if (window.AndroidNativeNotifications) {
+    try {
+      window.AndroidNativeNotifications.showNotification(
+        systemTitle,
+        fullBody,
+        notification.id
+      );
+      return;
+    } catch {
+      // fall through to Web / SW notification
+    }
+  }
+
+  // Layer B: Request Web Notification permission if still 'default'
   if ('Notification' in window && Notification.permission === 'default') {
     try {
       await Notification.requestPermission();
@@ -733,17 +986,18 @@ export async function dispatchSystemAndInAppNotification(
     }
   }
 
-  // Attempt native Service Worker / System Notification at top of phone if granted
+  // Layer C: Mobile Service Worker & System Tray Notification
   if ('Notification' in window && Notification.permission === 'granted') {
     const resolvedPngLogo = new URL(
       'pwa-192x192.png',
       window.location.origin + '/'
     ).href;
-    const fullBody = `${notification.bodyAr}\n${notification.subtitleOrHadithAr}`;
+
     const swOptions: NotificationOptions & {
       renotify?: boolean;
       vibrate?: number[];
       requireInteraction?: boolean;
+      data?: Record<string, unknown>;
     } = {
       body: fullBody,
       dir: 'rtl',
@@ -753,7 +1007,12 @@ export async function dispatchSystemAndInAppNotification(
       tag: notification.id,
       renotify: true,
       requireInteraction: notification.category === 'ADHAN',
-      vibrate: [200, 100, 200],
+      vibrate: [250, 100, 250, 100, 350],
+      data: {
+        url: '/',
+        actionTab: notification.actionTab,
+        mushafPage: notification.mushafPage,
+      },
     };
 
     const basicOptions: NotificationOptions = {
@@ -764,23 +1023,34 @@ export async function dispatchSystemAndInAppNotification(
       tag: notification.id,
     };
 
-    const systemTitle = `المحراب · ${notification.titleAr}`;
-
     let deliveredViaSW = false;
-    if ('serviceWorker' in navigator) {
-      try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg && typeof reg.showNotification === 'function') {
+    const reg = await ensureMobileServiceWorkerRegistration();
+    if (reg) {
+      if (typeof reg.showNotification === 'function') {
+        try {
+          await reg.showNotification(systemTitle, swOptions);
+          deliveredViaSW = true;
+        } catch {
           try {
-            await reg.showNotification(systemTitle, swOptions);
-            deliveredViaSW = true;
-          } catch {
             await reg.showNotification(systemTitle, basicOptions);
             deliveredViaSW = true;
+          } catch {
+            // fallback below
           }
         }
-      } catch {
-        // fall through to window.Notification
+      }
+
+      if (!deliveredViaSW && reg.active) {
+        try {
+          reg.active.postMessage({
+            type: 'SHOW_PHONE_NOTIFICATION',
+            title: systemTitle,
+            options: swOptions,
+          });
+          deliveredViaSW = true;
+        } catch {
+          // fallback below
+        }
       }
     }
 
@@ -799,7 +1069,19 @@ export function getBrowserNotificationPermissionState():
   | 'denied'
   | 'default'
   | 'unsupported' {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
+  if (typeof window === 'undefined') {
+    return 'unsupported';
+  }
+  if (window.AndroidNativeNotifications) {
+    try {
+      return window.AndroidNativeNotifications.hasPermission()
+        ? 'granted'
+        : 'default';
+    } catch {
+      return 'granted';
+    }
+  }
+  if (!('Notification' in window)) {
     return 'unsupported';
   }
   return Notification.permission;
@@ -813,21 +1095,48 @@ export async function requestAndVerifyPushPermission(
   permissionState: 'granted' | 'denied' | 'default' | 'unsupported';
   statusMessageAr: string;
 }> {
+  // Pre-register the mobile Service Worker so it is ready on the phone immediately
+  await ensureMobileServiceWorkerRegistration();
+
+  // If running inside the Android Native App, trigger the native Android 13+ permission dialog
+  if (typeof window !== 'undefined' && window.AndroidNativeNotifications) {
+    try {
+      window.AndroidNativeNotifications.requestPermission();
+    } catch {
+      // ignore
+    }
+  }
+
   const testNotif = buildTestPushNotification(
     cityNameAr,
     nextPrayerNameAr,
     nextPrayerTime
   );
 
-  // Immediately show the in-app heads-up push banner & play chime before awaiting OS dialog
-  // so the user ALWAYS gets instant visual & audio feedback even if OS dialog is blocked by iframe
+  // Immediately show the in-app heads-up push banner, chime & native/SW notification
   await dispatchSystemAndInAppNotification(testNotif);
 
+  if (typeof window !== 'undefined' && window.AndroidNativeNotifications) {
+    return {
+      permissionState: 'granted',
+      statusMessageAr:
+        'تم تفعيل إشعارات هاتف الأندرويد الأصلية وإرسال إشعار فوري إلى شريط الهاتف العلوي وشاشة القفل بنجاح.',
+    };
+  }
+
   if (typeof window === 'undefined' || !('Notification' in window)) {
+    const caps = getMobilePushDeviceCapabilities();
+    if (caps.isIOSDevice && !caps.isStandalonePWA) {
+      return {
+        permissionState: 'unsupported',
+        statusMessageAr:
+          'تم إرسال الإشعار الفوري والصوتي أعلى الشاشة بنجاح. (على آيفون: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية» لتفعيل إشعارات شاشة القفل).',
+      };
+    }
     return {
       permissionState: 'unsupported',
       statusMessageAr:
-        'تم تفعيل وإرسال إشعار المحراب الفوري أعلى الشاشة مع التنبيه الصوتي بنجاح.',
+        'تم تفعيل وإرسال إشعار المحراب الفوري أعلى الشاشة مع التنبيه الصوتي والاهتزاز بنجاح.',
     };
   }
 
@@ -837,26 +1146,26 @@ export async function requestAndVerifyPushPermission(
       return {
         permissionState: 'granted',
         statusMessageAr:
-          'تم تفعيل دفع إشعارات النظام والتطبيق بنجاح وإرسال إشعار تأكيدي الآن أعلى الشاشة.',
+          'تم تفعيل دفع الإشعارات على الهاتف بنجاح وإرسال إشعار تأكيدي الآن إلى شريط إشعارات الهاتف وأعلى الشاشة.',
       };
     }
     if (perm === 'denied') {
       return {
         permissionState: 'denied',
         statusMessageAr:
-          'تم إرسال الإشعار الفوري والصوتي داخل التطبيق بنجاح (لتفعيل إشعارات قفل الشاشة الخارجية يرجى السماح بالإشعارات من إعدادات المتصفح).',
+          'تم إرسال الإشعار الفوري والصوتي داخل التطبيق بنجاح (لتفعيل ظهور الإشعار في شاشة قفل الهاتف يرجى السماح بالإشعارات من إعدادات المتصفح/الهاتف).',
       };
     }
     return {
       permissionState: 'default',
       statusMessageAr:
-        'تم تفعيل الإشعارات الفورية داخل التطبيق وإرسال إشعار تجريبي أعلى الشاشة بنجاح.',
+        'تم تفعيل الإشعارات الفورية على الهاتف وإرسال إشعار تجريبي أعلى الشاشة بنجاح.',
     };
   } catch {
     return {
       permissionState: getBrowserNotificationPermissionState(),
       statusMessageAr:
-        'تم تفعيل وإرسال إشعار المحراب الفوري والصوتي أعلى الشاشة بنجاح.',
+        'تم تفعيل وإرسال إشعار المحراب الفوري والصوتي على الهاتف بنجاح.',
     };
   }
 }

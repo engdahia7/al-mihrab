@@ -3,7 +3,8 @@
  * Automatically patches the Capacitor Android project to satisfy all
  * Google Play Console requirements (Target SDK 36 / API 36, unique versionCode,
  * release signing config, R8 minification/deobfuscation mapping, RTL support,
- * optional hardware features, and official launcher icons).
+ * optional hardware features, official launcher icons, and Native Android
+ * Push Notification bridge for lock-screen & status-bar phone notifications).
  */
 
 import fs from 'node:fs';
@@ -156,7 +157,193 @@ if (fs.existsSync(manifestPath)) {
   console.log('[Play Console Config] Updated AndroidManifest.xml with permissions & optional hardware features.');
 }
 
-// 5. Copy official Al-Mihrab 512x512 PNG icon into Android mipmap directories
+// 5. Patch MainActivity.java to provide Native Android Heads-Up & Lock-Screen Notifications Bridge
+const mainActivityPath = path.join(
+  androidDir,
+  'app',
+  'src',
+  'main',
+  'java',
+  'app',
+  'almihrab',
+  'twa',
+  'MainActivity.java'
+);
+if (fs.existsSync(mainActivityPath)) {
+  const mainActivityJava = `package app.almihrab.twa;
+
+import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
+import com.getcapacitor.BridgeActivity;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends BridgeActivity {
+    private static final String CHANNEL_ID = "almihrab_push_channel";
+    private static final String CHANNEL_NAME = "إشعارات المحراب والأذان";
+    private static final int REQ_POST_NOTIFICATIONS = 1001;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final List<Runnable> scheduledRunnables = new ArrayList<>();
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        createMihrabNotificationChannel();
+        requestNotificationPermissionIfNeeded();
+
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            WebView webView = this.bridge.getWebView();
+            webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+            webView.addJavascriptInterface(new AndroidNativeNotificationsBridge(), "AndroidNativeNotifications");
+        }
+    }
+
+    private void createMihrabNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("تنبيهات مواقيت الصلاة والأذان والأذكار اليومية من تطبيق المحراب");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 250, 120, 250, 120, 350});
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQ_POST_NOTIFICATIONS
+                );
+            }
+        }
+    }
+
+    private void postNativeNotification(String title, String body, String tag) {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        int notificationId = (tag != null && !tag.isEmpty()) ? Math.abs(tag.hashCode()) : (int) (System.currentTimeMillis() % 100000);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, flags);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(getApplicationInfo().icon)
+            .setContentTitle(title != null ? title : "المحراب")
+            .setContentText(body != null ? body : "")
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVibrate(new long[]{0, 250, 120, 250, 120, 350})
+            .setContentIntent(pendingIntent);
+
+        manager.notify(notificationId, builder.build());
+    }
+
+    public class AndroidNativeNotificationsBridge {
+        @JavascriptInterface
+        public boolean showNotification(final String title, final String body, final String tag) {
+            mainHandler.post(() -> postNativeNotification(title, body, tag));
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean scheduleDelayedNotification(final String title, final String body, final String tag, final long delayMs) {
+            if (delayMs <= 0) {
+                mainHandler.post(() -> postNativeNotification(title, body, tag));
+                return true;
+            }
+            Runnable task = () -> postNativeNotification(title, body, tag);
+            synchronized (scheduledRunnables) {
+                scheduledRunnables.add(task);
+            }
+            mainHandler.postDelayed(task, delayMs);
+            return true;
+        }
+
+        @JavascriptInterface
+        public void clearScheduledNotifications() {
+            synchronized (scheduledRunnables) {
+                for (Runnable task : scheduledRunnables) {
+                    mainHandler.removeCallbacks(task);
+                }
+                scheduledRunnables.clear();
+            }
+        }
+
+        @JavascriptInterface
+        public boolean requestPermission() {
+            mainHandler.post(() -> requestNotificationPermissionIfNeeded());
+            return hasPermission();
+        }
+
+        @JavascriptInterface
+        public boolean hasPermission() {
+            if (Build.VERSION.SDK_INT >= 33) {
+                return ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS)
+                    == PackageManager.PERMISSION_GRANTED;
+            }
+            return true;
+        }
+    }
+}
+`;
+  fs.writeFileSync(mainActivityPath, mainActivityJava, 'utf8');
+  console.log('[Play Console Config] Upgraded MainActivity.java with Native Android Push Notification Bridge.');
+}
+
+// 6. Patch android/app/proguard-rules.pro so R8 keeps @JavascriptInterface methods in Release AAB
+const proguardPath = path.join(androidDir, 'app', 'proguard-rules.pro');
+if (fs.existsSync(proguardPath)) {
+  let proguard = fs.readFileSync(proguardPath, 'utf8');
+  const keepRules = `
+# Keep Al-Mihrab Native Android Push Notification JavascriptInterface for R8 release builds
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class app.almihrab.twa.** { *; }
+`;
+  if (!proguard.includes('AndroidNativeNotifications')) {
+    proguard += `\n${keepRules}`;
+    fs.writeFileSync(proguardPath, proguard, 'utf8');
+    console.log('[Play Console Config] Added R8 keep rules for @JavascriptInterface in proguard-rules.pro.');
+  }
+}
+
+// 7. Copy official Al-Mihrab 512x512 PNG icon into Android mipmap directories
 const iconSource = path.join(rootDir, 'public', 'pwa-512x512.png');
 const resDir = path.join(androidDir, 'app', 'src', 'main', 'res');
 if (fs.existsSync(iconSource) && fs.existsSync(resDir)) {

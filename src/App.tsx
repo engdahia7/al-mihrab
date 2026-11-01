@@ -57,6 +57,8 @@ import {
   evaluateScheduledNotificationsForMinute,
   loadPushChannelsConfig,
   dispatchSystemAndInAppNotification,
+  ensureMobileServiceWorkerRegistration,
+  syncTodayNotificationsWithPhoneOS,
   type DispatchedIslamicNotification,
 } from './utils/notificationDispatcher';
 import {
@@ -263,10 +265,72 @@ export default function App() {
     useState<DispatchedIslamicNotification | null>(null);
 
   useEffect(() => {
-    return subscribePushNotifications((active) => {
+    ensureMobileServiceWorkerRegistration().catch(() => {});
+
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (data && data.type === 'NOTIFICATION_CLICKED' && data.data) {
+        if (typeof data.data.mushafPage === 'number') {
+          setTargetMushafPage(data.data.mushafPage);
+        }
+        const targetTab = data.data.actionTab as ActiveTab | undefined;
+        if (targetTab) {
+          setActiveTab(targetTab);
+        }
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener(
+        'message',
+        onServiceWorkerMessage
+      );
+    }
+
+    const unsub = subscribePushNotifications((active) => {
       setActivePushBanner(active);
     });
+
+    return () => {
+      unsub();
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener(
+          'message',
+          onServiceWorkerMessage
+        );
+      }
+    };
   }, []);
+
+  // Automatically sync daily prayer & adhkar schedule with the phone OS whenever city/method changes
+  useEffect(() => {
+    const now = new Date();
+    const times = calculateAstronomicalPrayerTimes(
+      now,
+      selectedCity.latitude,
+      selectedCity.longitude,
+      selectedCity.timezoneOffsetHours,
+      methodId,
+      asrMethod
+    );
+    let alertsCfg = getDefaultPrayerAlertsConfig();
+    try {
+      const saved = localStorage.getItem('almihrab_prayer_alerts_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.fajr && parsed.dhuhr) alertsCfg = parsed;
+      }
+    } catch {
+      // ignore
+    }
+    syncTodayNotificationsWithPhoneOS({
+      todayTimes: times,
+      alertsConfig: alertsCfg,
+      channelsConfig: loadPushChannelsConfig(),
+      cityNameAr: selectedCity.nameAr,
+      lastThirdStartHHMM: times.lastThird,
+    });
+  }, [selectedCity, methodId, asrMethod]);
 
   // Global background notification scheduler for Prayer Alerts (outside prayers tab) & Custom Adhkar Reminders (all tabs)
   useEffect(() => {
